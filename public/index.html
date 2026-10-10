@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LUDO BY BBTECH</title>
 <meta name="description" content="Roll the Dice. Make Your Move. Become a Champion.">
+<link rel="preload" as="image" href="board.webp" fetchpriority="high">
 <style>
 :root{--ink:#060b1f;--line:rgba(160,185,255,.16);--txt:#f0f4ff;--muted:#9db0e0;--gold:#fbbf24}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -36,12 +37,9 @@ button.go{background:linear-gradient(135deg,#22c55e,#15803d);box-shadow:0 10px 2
 .hero h2{font-size:clamp(34px,6vw,58px);line-height:1.02;font-weight:900;letter-spacing:-.02em}
 .hero h2 span{background:linear-gradient(90deg,var(--gold),#fff,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
 .tag{color:var(--muted);margin:14px 0 24px;font-size:17px;line-height:1.5}
-/* wooden frame like the uploaded board */
-.board-wrap{width:min(94vw,560px);aspect-ratio:1;margin:0 auto;padding:14px;border-radius:14px;background:linear-gradient(135deg,#f2c48d,#b97c42 35%,#e7b06f 60%,#9c6330);box-shadow:0 30px 70px rgba(0,0,0,.55),inset 0 0 0 2px #ffffff55}
-.board-wrap svg{width:100%;height:100%;display:block;border-radius:4px;background:#fff}
 .tok.clickable{cursor:pointer}
-.tok .ring{transform-box:fill-box;transform-origin:center;animation:pulse 1s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+.tok .ring{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
 .game{display:grid;gap:18px;align-items:start}
 @media(min-width:900px){.game{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}}
 .side{display:grid;gap:14px}
@@ -67,7 +65,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 .toast{background:#0b1638ee;border:2px solid;border-radius:14px;padding:10px 16px;text-align:center;font-weight:800;animation:pop 1.6s ease forwards;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 @keyframes pop{0%{opacity:0;transform:translateY(-10px) scale(.9)}12%{opacity:1;transform:translateY(0) scale(1.03)}20%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-12px)}}
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
-.overlay{position:fixed;inset:0;background:rgba(3,7,20,.7);backdrop-filter:blur(6px);display:grid;place-items:center;padding:20px;z-index:50}
+.overlay{position:fixed;inset:0;background:rgba(3,7,20,.85);display:grid;place-items:center;padding:20px;z-index:50}
 .overlay .card{width:min(440px,100%);text-align:center}
 .overlay ol{list-style:none;display:grid;gap:8px;margin:18px 0}
 .overlay li{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);text-align:left}
@@ -81,7 +79,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 .board-overlay{position:absolute;left:6.5%;top:7.3%;width:87.5%;height:83.3%;overflow:visible}
 .field{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1a44;color:#fff;font:inherit}
 </style>
-<script src="/socket.io/socket.io.js"></script>
+<script src="/socket.io/socket.io.js" defer></script>
 </head>
 <body>
 
@@ -104,7 +102,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
         <button class="alt" onclick="show('online')">Play online</button>
       </div>
     </div>
-    <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
+    <div class="board"><img class="board-img" src="board.webp" alt="Football Ludo board" width="1000" height="1000" fetchpriority="high" decoding="async"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
   </section>
 
   <section id="setup" class="hidden" style="max-width:760px;margin:0 auto">
@@ -188,7 +186,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 
 <section id="game" class="hidden game">
     <div class="side" style="justify-items:center">
-      <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board"><svg id="svgGame" class="board-overlay" viewBox="0 0 15 15" role="application" aria-label="Ludo tokens"></svg></div>
+      <div class="board"><img class="board-img" src="board.webp" alt="Football Ludo board" width="1000" height="1000" decoding="async"><svg id="svgGame" class="board-overlay" viewBox="0 0 15 15" role="application" aria-label="Ludo tokens"></svg></div>
     </div>
     <div class="side">
       <div class="card">
@@ -362,6 +360,9 @@ function drawBoard(el,players,legal=[],turnP=-1){
       +`<circle cx="${tk.x+.06}" cy="${tk.y+.1}" r=".3" fill="${DARK[tk.c]}" opacity=".35"/>`
       +`<circle cx="${tk.x-.12}" cy="${tk.y-.15}" r=".12" fill="#fff" opacity=".45"/></g>`;
   }));
+  // Skip DOM work when nothing visible changed
+  if(el._last===s) return;
+  el._last=s;
   el.innerHTML=s;
 }
 
@@ -696,7 +697,10 @@ async function applyOnlineState(next){
   busy=false;
   G=next; step();
 }
-if(typeof io!=='undefined'){
+
+// Wait for the page to finish loading so socket.io.js (deferred) is available
+window.addEventListener('load',()=>{
+  if(typeof io==='undefined') return;
   online.socket=io();
   online.socket.on('connect',()=>{
     setOnStatus('Connected');
@@ -710,7 +714,8 @@ if(typeof io!=='undefined'){
     if(!st.G){ showWaiting(st); return; }
     onlineQueue=onlineQueue.then(()=>applyOnlineState(st.G));
   });
-}
+});
+
 function setOnStatus(t){ const el=$('onStatus'); if(el) el.textContent=t; }
 function showWaiting(st){
   show('online');
