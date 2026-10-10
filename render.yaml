@@ -1,0 +1,8 @@
+# Render.com deployment: connect this folder (in a GitHub repo) and Render builds it automatically.
+services:
+  - type: web
+    name: ludo-by-bbtech
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
