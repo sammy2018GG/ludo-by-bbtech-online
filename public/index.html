@@ -80,7 +80,9 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 .voicebar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;background:#0b1638f2;border:1px solid var(--line);border-radius:18px;padding:12px 14px;z-index:30;width:min(94vw,640px);box-shadow:0 14px 40px rgba(0,0,0,.5)}
 .voicebar button{min-height:42px;padding:10px 16px}
 .voicebar .hint{margin:0;flex-basis:100%;text-align:center}
-.voicebar .voice-desc{color:#d6e0ff;font-size:13px}
+.voicebar details{flex-basis:100%;text-align:center;font-size:13px;color:#d6e0ff}
+.voicebar summary{cursor:pointer;color:var(--gold);font-weight:700;list-style:none}
+.voicebar details p{margin-top:6px}
 </style>
 <script src="/socket.io/socket.io.js" defer></script>
 </head>
@@ -162,7 +164,10 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
       <div>
         <h2 style="font-size:30px;font-weight:900">Play online with family</h2>
         <p class="hint" style="font-size:15px;color:#d6e0ff">Play with family on your own phones, each in your own home or the same room. One person creates a room and shares the 4-digit code or link. Everyone else joins with that code, and the host starts the game when all seats are filled. The server rolls the dice and checks every move, so nobody can cheat.</p>
-        <p class="hint" style="font-size:15px;color:#fde68a;margin-top:12px"><b>Talk while you play.</b> Your microphone turns on when you create, join, or start a game, so you can call out your moves, cheer sixes, and tease rivals. Allow the microphone when asked, and use headphones for the clearest sound.</p>
+        <details style="margin-top:10px;font-size:14px;color:#fde68a">
+          <summary style="cursor:pointer;font-weight:700">🎙️ Talk while you play</summary>
+          <p style="margin-top:6px;color:#d6e0ff">Your microphone turns on when you create, join, or start a game. Call out moves, cheer sixes, and tease rivals. Allow the microphone when asked, and use headphones for the clearest sound.</p>
+        </details>
       </div>
       <div><p class="label">Your name</p><input id="onName" maxlength="16" placeholder="e.g. Mum" class="field"></div>
       <div>
@@ -213,7 +218,10 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 
 <!-- Voice bar: visible while you are in an online room -->
 <div id="voiceBar" class="voicebar hidden">
-  <p class="hint voice-desc">🎙️ Talk to your family: call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
+  <details class="voice-desc">
+    <summary>🎙️ How to talk</summary>
+    <p>Call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
+  </details>
   <button id="voiceBtn" class="go" onclick="voiceToggle()">🎤 Join voice</button>
   <button id="muteBtn" class="alt hidden" onclick="voiceMute()">🎙️ Mute</button>
   <button id="soundNowBtn" class="alt hidden" onclick="voiceEnableAudio()">🔈 Enable sound</button>
@@ -688,309 +696,4 @@ function pick(k,v,btn){
 }
 
 /* ================= ONLINE (family multiplayer) ================= */
-const NO_SERVER='Online play needs the game running from its server. See the README.';
-const online={socket:null,seat:-1,code:'',token:'',name:'Player'};
-let onlineQueue=Promise.resolve();
-
-// Show each token hopping square by square, then settle on the server's state
-async function applyOnlineState(next){
-  next.mode='online'; next.handoff=false;
-  if($('game').classList.contains('hidden')) show('game');
-  const prev=G;
-  if(!prev||!prev.players||prev.over||prev.mode!=='online'||prev.players.length!==next.players.length){ G=next; return step(); }
-  busy=true;
-  for(let p=0;p<next.players.length;p++) for(let i=0;i<4;i++){
-    const from=prev.players[p].tokens[i], to=next.players[p].tokens[i];
-    if(to<=from) continue;
-    const frames=from===0?[to]:Array.from({length:to-from},(_,j)=>from+j+1);
-    for(const f of frames){
-      G=JSON.parse(JSON.stringify(next));
-      G.players[p].tokens[i]=f;
-      render();
-      if(from===0) sfx.enter(); else sfx.hop();
-      await sleep(130);
-    }
-  }
-  busy=false;
-  G=next; step();
-}
-
-/* ================= VOICE CHAT (WebRTC, audio goes phone to phone) ================= */
-// For calls across different networks, add a TURN server to iceServers (see the notes).
-const RTC_CONFIG={
-  iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}
-    // ,{urls:'turn:your-turn-host:3478',username:'USER',credential:'PASSWORD'}
-  ]
-};
-const MIC_OPTS={audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}};
-const VOICE={stream:null,micReq:null,on:false,busy:false,declined:false,muted:false,peers:new Map(),names:new Map()};
-
-function voiceNote(t){ const el=$('voicePeers'); if(el) el.textContent=t; }
-
-// Asks for the microphone once and reuses the stream. Call it from a tap so the browser shows the prompt.
-function getMic(){
-  if(VOICE.stream) return Promise.resolve(VOICE.stream);
-  if(!VOICE.micReq){
-    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.reject({name:'Unsupported'});
-    VOICE.micReq=navigator.mediaDevices.getUserMedia(MIC_OPTS)
-      .then(s=>{ VOICE.stream=s; return s; })
-      .catch(err=>{ VOICE.micReq=null; throw err; });
-  }
-  return VOICE.micReq;
-}
-function stopMic(){
-  if(VOICE.stream) VOICE.stream.getTracks().forEach(t=>t.stop());
-  VOICE.stream=null; VOICE.micReq=null;
-}
-function prepareMic(){ getMic().catch(()=>{}); }
-
-function micMsg(err){
-  if(err&&err.name==='Unsupported') return 'Voice needs an https:// address and a current browser (Chrome, Safari, or Edge).';
-  if(err&&err.name==='NotAllowedError') return 'Microphone is blocked. Allow it for this site (tap the lock icon in the address bar), then tap Join voice.';
-  return 'Could not open the microphone. Tap Join voice to try again.';
-}
-
-function renderVoice(){
-  const bar=$('voiceBar'); if(!bar) return;
-  bar.classList.toggle('hidden',!online.code);
-  const btn=$('voiceBtn');
-  btn.textContent=VOICE.on?'📞 Leave voice':'🎤 Join voice';
-  btn.className=VOICE.on?'alt':'go';
-  $('muteBtn').classList.toggle('hidden',!VOICE.on);
-  $('muteBtn').textContent=VOICE.muted?'🔇 Unmute':'🎙️ Mute';
-  const blocked=[...$('voiceAudio').querySelectorAll('audio')].some(a=>a.paused&&a.srcObject);
-  $('soundNowBtn').classList.toggle('hidden',!blocked);
-  if(VOICE.busy) return;
-  if(!VOICE.on){ voiceNote(VOICE.declined?'Mic is off. Tap Join voice to talk.':'Voice is off. Tap Join voice to talk.'); return; }
-  const list=[...VOICE.peers.entries()].map(([id,e])=>
-    `${VOICE.names.get(id)||'Player'} ${e.pc.connectionState==='connected'?'🟢':'🟡'}`);
-  voiceNote(list.length?`Talking with: ${list.join(' · ')}`:'Mic is on. Waiting for others to join voice…');
-}
-
-function removePeer(id){
-  const e=VOICE.peers.get(id); if(!e) return;
-  try{ e.pc.close(); }catch(_){}
-  if(e.audio){ e.audio.srcObject=null; e.audio.remove(); }
-  VOICE.peers.delete(id); VOICE.names.delete(id);
-  renderVoice();
-}
-
-async function makeOffer(id,e,iceRestart=false){
-  const offer=await e.pc.createOffer({iceRestart});
-  await e.pc.setLocalDescription(offer);
-  online.socket.emit('voice:signal',{to:id,data:{sdp:e.pc.localDescription}});
-}
-
-function createPeer(id,initiator){
-  if(VOICE.peers.has(id)) return VOICE.peers.get(id);
-  const pc=new RTCPeerConnection(RTC_CONFIG);
-  const e={pc,audio:null,pending:[],initiator};
-  VOICE.peers.set(id,e);
-  VOICE.stream.getTracks().forEach(t=>pc.addTrack(t,VOICE.stream));
-
-  pc.onicecandidate=ev=>{
-    if(ev.candidate) online.socket.emit('voice:signal',{to:id,data:{candidate:ev.candidate}});
-  };
-  pc.ontrack=ev=>{
-    if(!e.audio){
-      e.audio=document.createElement('audio');
-      e.audio.autoplay=true;
-      e.audio.playsInline=true;
-      $('voiceAudio').appendChild(e.audio);
-    }
-    e.audio.srcObject=ev.streams[0];
-    e.audio.play().catch(()=>renderVoice());
-    renderVoice();
-  };
-  pc.onconnectionstatechange=()=>{
-    if(pc.connectionState==='failed'&&e.initiator) makeOffer(id,e,true).catch(()=>{});
-    renderVoice();
-  };
-  if(initiator) makeOffer(id,e).catch(()=>{});
-  return e;
-}
-
-async function voiceJoin(){
-  if(VOICE.on||VOICE.busy||!online.socket||!online.code) return;
-  VOICE.busy=true;
-  voiceNote('Turning on your microphone…');
-  try{
-    await getMic();
-  }catch(err){
-    VOICE.busy=false;
-    VOICE.declined=!!(err&&err.name==='NotAllowedError');
-    voiceNote(micMsg(err));
-    return;
-  }
-  VOICE.busy=false; VOICE.on=true; VOICE.muted=false; VOICE.declined=false;
-  renderVoice();
-  online.socket.emit('voice:join',{name:online.name},res=>{
-    (res&&res.peers||[]).forEach(p=>{
-      VOICE.names.set(p.id,p.name);
-      // Same rule on both phones: the smaller socket id makes the offer
-      createPeer(p.id,online.socket.id<p.id);
-    });
-    renderVoice();
-  });
-}
-
-function voiceLeave(){
-  if(online.socket&&VOICE.on) online.socket.emit('voice:leave');
-  [...VOICE.peers.keys()].forEach(removePeer);
-  stopMic();
-  VOICE.on=false; VOICE.muted=false;
-  renderVoice();
-}
-
-function voiceToggle(){
-  if(VOICE.on){ voiceLeave(); return; }
-  VOICE.declined=false;
-  voiceJoin();
-}
-
-function voiceMute(){
-  if(!VOICE.stream) return;
-  VOICE.muted=!VOICE.muted;
-  VOICE.stream.getAudioTracks().forEach(t=>t.enabled=!VOICE.muted);
-  renderVoice();
-}
-
-// Some phones block audio until a tap. This starts all incoming voices.
-function voiceEnableAudio(){
-  document.querySelectorAll('#voiceAudio audio').forEach(a=>a.play().catch(()=>{}));
-  setTimeout(renderVoice,300);
-}
-
-/* ================= SOCKET CONNECTION ================= */
-window.addEventListener('load',()=>{
-  if(typeof io==='undefined'){ setOnStatus(NO_SERVER); return; }
-  online.socket=io();
-
-  online.socket.on('connect',()=>{
-    setOnStatus('Connected');
-    if(online.code&&online.token) online.socket.emit('room:rejoin',{code:online.code,token:online.token},res=>{
-      if(res&&res.error) return setOnStatus(res.error);
-      online.seat=res.seat;
-    });
-  });
-
-  online.socket.on('disconnect',()=>{
-    setOnStatus('Connection lost. Reconnecting…');
-    if(VOICE.on){
-      [...VOICE.peers.keys()].forEach(removePeer);
-      stopMic();
-      VOICE.on=false;
-      voiceNote('Voice dropped. It will reconnect automatically.');
-      renderVoice();
-    }
-  });
-
-  online.socket.on('state',st=>{
-    online.code=st.code;
-    if(!st.G) showWaiting(st);
-    else onlineQueue=onlineQueue.then(()=>applyOnlineState(st.G));
-    // Microphone turns on automatically once you are in a room (and again after reconnecting)
-    if(!VOICE.on&&!VOICE.busy&&!VOICE.declined) voiceJoin();
-    renderVoice();
-  });
-
-  online.socket.on('voice:joined',({id,name})=>{
-    VOICE.names.set(id,name);
-    if(VOICE.on) createPeer(id,online.socket.id<id);
-    renderVoice();
-  });
-
-  online.socket.on('voice:left',({id})=>removePeer(id));
-
-  online.socket.on('voice:signal',async({from,data})=>{
-    if(!VOICE.on) return;
-    const e=VOICE.peers.get(from)||createPeer(from,false);
-    const pc=e.pc;
-    try{
-      if(data.sdp){
-        await pc.setRemoteDescription(data.sdp);
-        if(data.sdp.type==='offer'){
-          await pc.setLocalDescription(await pc.createAnswer());
-          online.socket.emit('voice:signal',{to:from,data:{sdp:pc.localDescription}});
-        }
-        for(const c of e.pending) await pc.addIceCandidate(c);
-        e.pending=[];
-      } else if(data.candidate){
-        if(pc.remoteDescription) await pc.addIceCandidate(data.candidate);
-        else e.pending.push(data.candidate);
-      }
-    }catch(err){ console.warn('[voice] signal error',err); }
-  });
-});
-
-function setOnStatus(t){ const el=$('onStatus'); if(el) el.textContent=t; }
-
-function showWaiting(st){
-  show('online');
-  $('onEntry').classList.add('hidden'); $('onWait').classList.remove('hidden');
-  $('onCode').textContent=st.code;
-  $('onLink').textContent=`${location.origin}/?room=${st.code}`;
-  const open=Array.from({length:st.size-st.seats.length},()=>'<li class="hint">Waiting for a player…</li>').join('');
-  $('onSeats').innerHTML=st.seats.map((s,k)=>`<li>${k===0?'Host · ':''}${s.name} ${s.connected?'🟢':'🔴'}</li>`).join('')+open;
-  const full=st.seats.length>=st.size;
-  $('onStart').classList.toggle('hidden',online.seat!==0);
-  $('onStart').disabled=!full;
-  $('onStart').textContent=full?'Start game':`Waiting for ${st.size-st.seats.length} more…`;
-  renderVoice();
-}
-
-function onlineCreate(){
-  if(!online.socket) return setOnStatus(NO_SERVER);
-  prepareMic(); // runs inside the tap, so the microphone prompt appears now
-  const name=$('onName').value.trim()||'Player';
-  online.name=name;
-  online.socket.emit('room:create',{name,size:mode.players},res=>{
-    if(res.error) return setOnStatus(res.error);
-    online.seat=res.seat; online.code=res.code; online.token=res.token;
-    renderVoice();
-  });
-}
-
-function onlineJoin(){
-  if(!online.socket) return setOnStatus(NO_SERVER);
-  prepareMic(); // runs inside the tap, so the microphone prompt appears now
-  const name=$('onName').value.trim()||'Player', code=$('onCodeIn').value.trim();
-  online.name=name;
-  online.socket.emit('room:join',{code,name},res=>{
-    if(res.error) return setOnStatus(res.error);
-    online.seat=res.seat; online.code=res.code; online.token=res.token;
-    renderVoice();
-  });
-}
-
-function onlineStart(){
-  prepareMic(); // host tap: microphone prompt for the match
-  online.socket.emit('room:start',null,res=>{ if(res&&res.error) setOnStatus(res.error); });
-}
-
-function onlineLeave(){
-  voiceLeave();
-  VOICE.declined=false;
-  location.href=location.pathname;
-}
-
-const qRoom=new URLSearchParams(location.search).get('room');
-if(qRoom){ show('online'); $('onCodeIn').value=qRoom; }
-
-/* ================= INIT ================= */
-$('logoHeader').innerHTML=logo(40);
-$('logoFooter').innerHTML=logo(26);
-drawBoard($('svgMenu'),COLORS.map(c=>({color:c,tokens:[0,1,9,30]})));
-$('svgGame').addEventListener('click',e=>{
-  const el=e.target.closest('[data-i]');
-  if(el) moveToken(+el.dataset.i);
-});
-document.addEventListener('keydown',e=>{
-  if(!G||G.over) return;
-  if(/^[1-4]$/.test(e.key)) moveToken(+e.key-1);
-  if(e.key==='r'&&!$('rollBtn').disabled) roll();
-});
-renderVoice();
-</script>
-</body>
-</html>
+const NO_SERVER='Online play needs the game running from its server. See the
