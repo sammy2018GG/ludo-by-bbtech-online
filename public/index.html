@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LUDO BY BBTECH</title>
 <meta name="description" content="Roll the Dice. Make Your Move. Become a Champion.">
+<link rel="preload" as="image" href="board.png" fetchpriority="high">
 <style>
 :root{--ink:#060b1f;--line:rgba(160,185,255,.16);--txt:#f0f4ff;--muted:#9db0e0;--gold:#fbbf24}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -74,7 +75,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 @keyframes bob{50%{transform:translateY(-8px) rotate(6deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .board{position:relative;width:min(98vw,calc(100vh - 150px),1000px);margin:0 auto}
-.board-img{display:block;width:100%;height:auto;aspect-ratio:1/1;border-radius:12px;box-shadow:0 30px 70px rgba(0,0,0,.55);background:#0b1638;user-select:none;-webkit-user-drag:none}
+.board-img{display:block;width:100%;height:auto;border-radius:12px;box-shadow:0 30px 70px rgba(0,0,0,.55);background:#0b1638;user-select:none;-webkit-user-drag:none}
 .board-overlay{position:absolute;left:6.5%;top:7.3%;width:87.5%;height:83.3%;overflow:visible}
 .field{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1a44;color:#fff;font:inherit}
 </style>
@@ -101,7 +102,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
         <button class="alt" onclick="show('online')">Play online</button>
       </div>
     </div>
-    <div class="board"><img class="board-img" src="board.webp" alt="Football Ludo board" width="1000" height="1000" fetchpriority="high" decoding="async" onerror="this.onerror=null;this.src='board.png'"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
+    <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board" fetchpriority="high" decoding="async"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
   </section>
 
   <section id="setup" class="hidden" style="max-width:760px;margin:0 auto">
@@ -185,7 +186,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 
 <section id="game" class="hidden game">
     <div class="side" style="justify-items:center">
-      <div class="board"><img class="board-img" src="board.webp" alt="Football Ludo board" width="1000" height="1000" decoding="async" onerror="this.onerror=null;this.src='board.png'"><svg id="svgGame" class="board-overlay" viewBox="0 0 15 15" role="application" aria-label="Ludo tokens"></svg></div>
+      <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board" decoding="async"><svg id="svgGame" class="board-overlay" viewBox="0 0 15 15" role="application" aria-label="Ludo tokens"></svg></div>
     </div>
     <div class="side">
       <div class="card">
