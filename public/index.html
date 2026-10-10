@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LUDO BY BBTECH</title>
 <meta name="description" content="Roll the Dice. Make Your Move. Become a Champion.">
-<link rel="preload" as="image" href="board.png" fetchpriority="high">
 <style>
 :root{--ink:#060b1f;--line:rgba(160,185,255,.16);--txt:#f0f4ff;--muted:#9db0e0;--gold:#fbbf24}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -16,7 +15,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .brand{display:flex;align-items:center;gap:12px}
 .brand h1{font-size:18px;letter-spacing:.14em;font-weight:900}
 .brand p{font-size:10px;letter-spacing:.24em;color:var(--gold);font-weight:700}
-main{flex:1;width:min(1400px,100%);margin:0 auto;padding:clamp(14px,4vw,32px)}
+main{flex:1;width:min(1400px,100%);margin:0 auto;padding:clamp(14px,4vw,32px) clamp(14px,4vw,32px) 170px}
 footer{border-top:1px solid var(--line);padding:16px;color:var(--muted);font-size:13px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
 footer b{color:var(--txt)}
 button{font:inherit;font-weight:700;color:#fff;border:0;border-radius:14px;padding:12px 20px;min-height:46px;cursor:pointer;background:linear-gradient(135deg,#2563eb,#1e3a8a);box-shadow:0 10px 28px rgba(37,99,235,.35);transition:transform .15s,opacity .2s}
@@ -78,6 +77,10 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 .board-img{display:block;width:100%;height:auto;border-radius:12px;box-shadow:0 30px 70px rgba(0,0,0,.55);background:#0b1638;user-select:none;-webkit-user-drag:none}
 .board-overlay{position:absolute;left:6.5%;top:7.3%;width:87.5%;height:83.3%;overflow:visible}
 .field{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1a44;color:#fff;font:inherit}
+.voicebar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;background:#0b1638f2;border:1px solid var(--line);border-radius:18px;padding:12px 14px;z-index:30;width:min(94vw,640px);box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.voicebar button{min-height:42px;padding:10px 16px}
+.voicebar .hint{margin:0;flex-basis:100%;text-align:center}
+.voicebar .voice-desc{color:#d6e0ff;font-size:13px}
 </style>
 <script src="/socket.io/socket.io.js" defer></script>
 </head>
@@ -158,7 +161,8 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
     <div id="onEntry" style="display:grid;gap:18px">
       <div>
         <h2 style="font-size:30px;font-weight:900">Play online with family</h2>
-        <p class="hint" style="font-size:15px;color:#d6e0ff">Play with family on your own phones, each in your own home or the same room. One person creates a room and shares the 4-digit code or link. Everyone else joins with that code, and the host starts the game when all seats are filled. The server rolls the dice and checks every move, so nobody can cheat. Your phones need to reach the game server (see the README).</p>
+        <p class="hint" style="font-size:15px;color:#d6e0ff">Play with family on your own phones, each in your own home or the same room. One person creates a room and shares the 4-digit code or link. Everyone else joins with that code, and the host starts the game when all seats are filled. The server rolls the dice and checks every move, so nobody can cheat.</p>
+        <p class="hint" style="font-size:15px;color:#fde68a;margin-top:12px"><b>Talk while you play.</b> Your microphone turns on when you create, join, or start a game, so you can call out your moves, cheer sixes, and tease rivals. Allow the microphone when asked, and use headphones for the clearest sound.</p>
       </div>
       <div><p class="label">Your name</p><input id="onName" maxlength="16" placeholder="e.g. Mum" class="field"></div>
       <div>
@@ -206,6 +210,16 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
     </div>
   </section>
 </main>
+
+<!-- Voice bar: visible while you are in an online room -->
+<div id="voiceBar" class="voicebar hidden">
+  <p class="hint voice-desc">🎙️ Talk to your family: call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
+  <button id="voiceBtn" class="go" onclick="voiceToggle()">🎤 Join voice</button>
+  <button id="muteBtn" class="alt hidden" onclick="voiceMute()">🎙️ Mute</button>
+  <button id="soundNowBtn" class="alt hidden" onclick="voiceEnableAudio()">🔈 Enable sound</button>
+  <p id="voicePeers" class="hint">Voice is off. Tap Join voice to talk.</p>
+</div>
+<div id="voiceAudio" style="position:absolute;width:0;height:0;overflow:hidden"></div>
 
 <div id="toasts" aria-live="polite"></div>
 <canvas id="fx" class="hidden"></canvas>
@@ -261,6 +275,8 @@ const rnd=n=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const mode={players:2,level:'medium',mode:'bots'};
 let G=null, aiTimer=null, busy=false;
+// True only while an online match is running (not for offline games)
+const isOnline=()=>!!(G&&G.mode==='online');
 
 const logo=s=>`<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true">
 <rect x="3" y="3" width="58" height="58" rx="16" fill="#001a5c"/>
@@ -360,7 +376,6 @@ function drawBoard(el,players,legal=[],turnP=-1){
       +`<circle cx="${tk.x+.06}" cy="${tk.y+.1}" r=".3" fill="${DARK[tk.c]}" opacity=".35"/>`
       +`<circle cx="${tk.x-.12}" cy="${tk.y-.15}" r=".12" fill="#fff" opacity=".45"/></g>`;
   }));
-  // Skip DOM work when nothing visible changed
   if(el._last===s) return;
   el._last=s;
   el.innerHTML=s;
@@ -385,7 +400,6 @@ function endTurn(){
 }
 
 /* ================= TWO-DICE ACTIONS ================= */
-// Tokens that can use at least one die that is still unspent
 function tokensUsable(p){
   const set=new Set();
   [0,1].forEach(k=>{ if(G.left[k]) legalMoves(p,G.dice[k]).forEach(i=>set.add(i)); });
@@ -394,14 +408,14 @@ function tokensUsable(p){
 const anyLegal=p=>tokensUsable(p).length>0;
 
 function dieSelect(k){
-  if(online.socket&&(!G||G.turn!==online.seat)) return;
+  if(isOnline()&&G.turn!==online.seat) return;
   if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)||!G.left[k]) return;
   G.sel=G.sel===k?null:k;
   render();
 }
 
 async function roll(){
-  if(online.socket){ if(G&&!G.over&&G.phase==='roll'&&G.turn===online.seat) online.socket.emit('game:roll'); return; }
+  if(isOnline()){ if(!G.over&&G.phase==='roll'&&G.turn===online.seat) online.socket.emit('game:roll'); return; }
   if(!G||G.over||G.phase!=='roll'||busy||G.handoff) return;
   busy=true;
   const p=G.turn, pl=G.players[p];
@@ -434,7 +448,7 @@ async function roll(){
 }
 
 function moveToken(i){
-  if(online.socket){ if(G&&G.turn===online.seat&&G.phase==='move') online.socket.emit('game:move',{i,k:G.sel}); return; }
+  if(isOnline()){ if(G.turn===online.seat&&G.phase==='move') online.socket.emit('game:move',{i,k:G.sel}); return; }
   if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)) return;
   const opts=[0,1].filter(k=>G.left[k]&&legalMoves(G.turn,G.dice[k]).includes(i));
   if(!opts.length) return;
@@ -489,7 +503,6 @@ async function applyMove(p,i,k){
   afterMove(p,pl);
 }
 
-// After each move: use the other die if possible, then extra turn on a six, else pass
 function afterMove(p,pl){
   if(anyLegal(p)){ G.phase='move'; return step(); }
   if(G.rolledSix&&!pl.rank){
@@ -568,7 +581,7 @@ function renderDice(){
 }
 
 function render(){
-  const human=online.socket?G.turn===online.seat:isHuman(G.turn);
+  const human=isOnline()?G.turn===online.seat:isHuman(G.turn);
   const legal=(!G.over&&!busy&&G.phase==='move'&&human)?tokensUsable(G.turn):[];
   drawBoard($('svgGame'),G.players,legal,G.turn);
 
@@ -576,11 +589,11 @@ function render(){
   $('status').textContent=G.over?'Match complete':`${pl.name}'s turn`;
   $('hint').textContent=G.over?'':human
     ? (G.phase==='roll'?'Roll the dice to continue.':'Tap a die to pick it (optional), then a glowing token.')
-    : (online.socket?`Waiting for ${G.players[G.turn].name}…`:'Bot is playing…');
+    : (isOnline()?`Waiting for ${pl.name}…`:'Bot is playing…');
   const rb=$('rollBtn');
   rb.disabled=G.over||busy||!human||G.phase!=='roll'||G.handoff;
   $('handoff').classList.toggle('hidden',!(G.handoff&&!G.over));
-  $('handoffName').textContent=G.players[G.turn].name;
+  $('handoffName').textContent=pl.name;
   rb.textContent=(human&&G.phase==='move')?'Choose a token':'Roll dice';
 
   renderDice();
@@ -617,8 +630,9 @@ function speak(text){
 function showWin(){
   const order=[...G.players].sort((a,b)=>(a.rank||99)-(b.rank||99));
   const champ=order[0];
+  const online_=isOnline();
   const pass=G.mode==='pass';
-  const won=champ.type==='human';
+  const won=online_?G.players.indexOf(champ)===online.seat:champ.type==='human';
   $('winTitle').textContent=pass?`${champ.name} wins!`:(won?'You are the champion!':`${champ.name} wins this match`);
   const msg=pass?`${champ.name} wins! Well played, everyone. Let's go again.`:(won?CELEBRATIONS[rnd(CELEBRATIONS.length)]:LOSS_LINES[0]);
   $('winMsg').textContent=msg;
@@ -651,6 +665,7 @@ function show(s){
   if(s!=='game'){clearTimeout(aiTimer);G=null;busy=false;}
   if('speechSynthesis' in window) speechSynthesis.cancel();
   window.scrollTo(0,0);
+  renderVoice();
 }
 
 function startHandoff(){
@@ -659,7 +674,7 @@ function startHandoff(){
 }
 
 function confirmQuit(){
-  if(confirm('Leave this match? Progress will be lost.')) (online.socket?onlineLeave():show('menu'));
+  if(confirm('Leave this match? Progress will be lost.')) (isOnline()?onlineLeave():show('menu'));
 }
 
 const MODE_TEXT={
@@ -674,13 +689,15 @@ function pick(k,v,btn){
 
 /* ================= ONLINE (family multiplayer) ================= */
 const NO_SERVER='Online play needs the game running from its server. See the README.';
-const online={socket:null,seat:-1,code:'',token:''};
+const online={socket:null,seat:-1,code:'',token:'',name:'Player'};
 let onlineQueue=Promise.resolve();
+
 // Show each token hopping square by square, then settle on the server's state
 async function applyOnlineState(next){
+  next.mode='online'; next.handoff=false;
   if($('game').classList.contains('hidden')) show('game');
   const prev=G;
-  if(!prev||!prev.players||prev.over||prev.players.length!==next.players.length){ G=next; return step(); }
+  if(!prev||!prev.players||prev.over||prev.mode!=='online'||prev.players.length!==next.players.length){ G=next; return step(); }
   busy=true;
   for(let p=0;p<next.players.length;p++) for(let i=0;i<4;i++){
     const from=prev.players[p].tokens[i], to=next.players[p].tokens[i];
@@ -698,25 +715,216 @@ async function applyOnlineState(next){
   G=next; step();
 }
 
-// Wait for the page to finish loading so socket.io.js (deferred) is available
+/* ================= VOICE CHAT (WebRTC, audio goes phone to phone) ================= */
+// For calls across different networks, add a TURN server to iceServers (see the notes).
+const RTC_CONFIG={
+  iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}
+    // ,{urls:'turn:your-turn-host:3478',username:'USER',credential:'PASSWORD'}
+  ]
+};
+const MIC_OPTS={audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}};
+const VOICE={stream:null,micReq:null,on:false,busy:false,declined:false,muted:false,peers:new Map(),names:new Map()};
+
+function voiceNote(t){ const el=$('voicePeers'); if(el) el.textContent=t; }
+
+// Asks for the microphone once and reuses the stream. Call it from a tap so the browser shows the prompt.
+function getMic(){
+  if(VOICE.stream) return Promise.resolve(VOICE.stream);
+  if(!VOICE.micReq){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.reject({name:'Unsupported'});
+    VOICE.micReq=navigator.mediaDevices.getUserMedia(MIC_OPTS)
+      .then(s=>{ VOICE.stream=s; return s; })
+      .catch(err=>{ VOICE.micReq=null; throw err; });
+  }
+  return VOICE.micReq;
+}
+function stopMic(){
+  if(VOICE.stream) VOICE.stream.getTracks().forEach(t=>t.stop());
+  VOICE.stream=null; VOICE.micReq=null;
+}
+function prepareMic(){ getMic().catch(()=>{}); }
+
+function micMsg(err){
+  if(err&&err.name==='Unsupported') return 'Voice needs an https:// address and a current browser (Chrome, Safari, or Edge).';
+  if(err&&err.name==='NotAllowedError') return 'Microphone is blocked. Allow it for this site (tap the lock icon in the address bar), then tap Join voice.';
+  return 'Could not open the microphone. Tap Join voice to try again.';
+}
+
+function renderVoice(){
+  const bar=$('voiceBar'); if(!bar) return;
+  bar.classList.toggle('hidden',!online.code);
+  const btn=$('voiceBtn');
+  btn.textContent=VOICE.on?'📞 Leave voice':'🎤 Join voice';
+  btn.className=VOICE.on?'alt':'go';
+  $('muteBtn').classList.toggle('hidden',!VOICE.on);
+  $('muteBtn').textContent=VOICE.muted?'🔇 Unmute':'🎙️ Mute';
+  const blocked=[...$('voiceAudio').querySelectorAll('audio')].some(a=>a.paused&&a.srcObject);
+  $('soundNowBtn').classList.toggle('hidden',!blocked);
+  if(VOICE.busy) return;
+  if(!VOICE.on){ voiceNote(VOICE.declined?'Mic is off. Tap Join voice to talk.':'Voice is off. Tap Join voice to talk.'); return; }
+  const list=[...VOICE.peers.entries()].map(([id,e])=>
+    `${VOICE.names.get(id)||'Player'} ${e.pc.connectionState==='connected'?'🟢':'🟡'}`);
+  voiceNote(list.length?`Talking with: ${list.join(' · ')}`:'Mic is on. Waiting for others to join voice…');
+}
+
+function removePeer(id){
+  const e=VOICE.peers.get(id); if(!e) return;
+  try{ e.pc.close(); }catch(_){}
+  if(e.audio){ e.audio.srcObject=null; e.audio.remove(); }
+  VOICE.peers.delete(id); VOICE.names.delete(id);
+  renderVoice();
+}
+
+async function makeOffer(id,e,iceRestart=false){
+  const offer=await e.pc.createOffer({iceRestart});
+  await e.pc.setLocalDescription(offer);
+  online.socket.emit('voice:signal',{to:id,data:{sdp:e.pc.localDescription}});
+}
+
+function createPeer(id,initiator){
+  if(VOICE.peers.has(id)) return VOICE.peers.get(id);
+  const pc=new RTCPeerConnection(RTC_CONFIG);
+  const e={pc,audio:null,pending:[],initiator};
+  VOICE.peers.set(id,e);
+  VOICE.stream.getTracks().forEach(t=>pc.addTrack(t,VOICE.stream));
+
+  pc.onicecandidate=ev=>{
+    if(ev.candidate) online.socket.emit('voice:signal',{to:id,data:{candidate:ev.candidate}});
+  };
+  pc.ontrack=ev=>{
+    if(!e.audio){
+      e.audio=document.createElement('audio');
+      e.audio.autoplay=true;
+      e.audio.playsInline=true;
+      $('voiceAudio').appendChild(e.audio);
+    }
+    e.audio.srcObject=ev.streams[0];
+    e.audio.play().catch(()=>renderVoice());
+    renderVoice();
+  };
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='failed'&&e.initiator) makeOffer(id,e,true).catch(()=>{});
+    renderVoice();
+  };
+  if(initiator) makeOffer(id,e).catch(()=>{});
+  return e;
+}
+
+async function voiceJoin(){
+  if(VOICE.on||VOICE.busy||!online.socket||!online.code) return;
+  VOICE.busy=true;
+  voiceNote('Turning on your microphone…');
+  try{
+    await getMic();
+  }catch(err){
+    VOICE.busy=false;
+    VOICE.declined=!!(err&&err.name==='NotAllowedError');
+    voiceNote(micMsg(err));
+    return;
+  }
+  VOICE.busy=false; VOICE.on=true; VOICE.muted=false; VOICE.declined=false;
+  renderVoice();
+  online.socket.emit('voice:join',{name:online.name},res=>{
+    (res&&res.peers||[]).forEach(p=>{
+      VOICE.names.set(p.id,p.name);
+      // Same rule on both phones: the smaller socket id makes the offer
+      createPeer(p.id,online.socket.id<p.id);
+    });
+    renderVoice();
+  });
+}
+
+function voiceLeave(){
+  if(online.socket&&VOICE.on) online.socket.emit('voice:leave');
+  [...VOICE.peers.keys()].forEach(removePeer);
+  stopMic();
+  VOICE.on=false; VOICE.muted=false;
+  renderVoice();
+}
+
+function voiceToggle(){
+  if(VOICE.on){ voiceLeave(); return; }
+  VOICE.declined=false;
+  voiceJoin();
+}
+
+function voiceMute(){
+  if(!VOICE.stream) return;
+  VOICE.muted=!VOICE.muted;
+  VOICE.stream.getAudioTracks().forEach(t=>t.enabled=!VOICE.muted);
+  renderVoice();
+}
+
+// Some phones block audio until a tap. This starts all incoming voices.
+function voiceEnableAudio(){
+  document.querySelectorAll('#voiceAudio audio').forEach(a=>a.play().catch(()=>{}));
+  setTimeout(renderVoice,300);
+}
+
+/* ================= SOCKET CONNECTION ================= */
 window.addEventListener('load',()=>{
-  if(typeof io==='undefined') return;
+  if(typeof io==='undefined'){ setOnStatus(NO_SERVER); return; }
   online.socket=io();
+
   online.socket.on('connect',()=>{
     setOnStatus('Connected');
     if(online.code&&online.token) online.socket.emit('room:rejoin',{code:online.code,token:online.token},res=>{
-      if(res&&res.error) setOnStatus(res.error); else online.seat=res.seat;
+      if(res&&res.error) return setOnStatus(res.error);
+      online.seat=res.seat;
     });
   });
-  online.socket.on('disconnect',()=>setOnStatus('Connection lost. Reconnecting…'));
+
+  online.socket.on('disconnect',()=>{
+    setOnStatus('Connection lost. Reconnecting…');
+    if(VOICE.on){
+      [...VOICE.peers.keys()].forEach(removePeer);
+      stopMic();
+      VOICE.on=false;
+      voiceNote('Voice dropped. It will reconnect automatically.');
+      renderVoice();
+    }
+  });
+
   online.socket.on('state',st=>{
     online.code=st.code;
-    if(!st.G){ showWaiting(st); return; }
-    onlineQueue=onlineQueue.then(()=>applyOnlineState(st.G));
+    if(!st.G) showWaiting(st);
+    else onlineQueue=onlineQueue.then(()=>applyOnlineState(st.G));
+    // Microphone turns on automatically once you are in a room (and again after reconnecting)
+    if(!VOICE.on&&!VOICE.busy&&!VOICE.declined) voiceJoin();
+    renderVoice();
+  });
+
+  online.socket.on('voice:joined',({id,name})=>{
+    VOICE.names.set(id,name);
+    if(VOICE.on) createPeer(id,online.socket.id<id);
+    renderVoice();
+  });
+
+  online.socket.on('voice:left',({id})=>removePeer(id));
+
+  online.socket.on('voice:signal',async({from,data})=>{
+    if(!VOICE.on) return;
+    const e=VOICE.peers.get(from)||createPeer(from,false);
+    const pc=e.pc;
+    try{
+      if(data.sdp){
+        await pc.setRemoteDescription(data.sdp);
+        if(data.sdp.type==='offer'){
+          await pc.setLocalDescription(await pc.createAnswer());
+          online.socket.emit('voice:signal',{to:from,data:{sdp:pc.localDescription}});
+        }
+        for(const c of e.pending) await pc.addIceCandidate(c);
+        e.pending=[];
+      } else if(data.candidate){
+        if(pc.remoteDescription) await pc.addIceCandidate(data.candidate);
+        else e.pending.push(data.candidate);
+      }
+    }catch(err){ console.warn('[voice] signal error',err); }
   });
 });
 
 function setOnStatus(t){ const el=$('onStatus'); if(el) el.textContent=t; }
+
 function showWaiting(st){
   show('online');
   $('onEntry').classList.add('hidden'); $('onWait').classList.remove('hidden');
@@ -728,25 +936,43 @@ function showWaiting(st){
   $('onStart').classList.toggle('hidden',online.seat!==0);
   $('onStart').disabled=!full;
   $('onStart').textContent=full?'Start game':`Waiting for ${st.size-st.seats.length} more…`;
+  renderVoice();
 }
+
 function onlineCreate(){
   if(!online.socket) return setOnStatus(NO_SERVER);
+  prepareMic(); // runs inside the tap, so the microphone prompt appears now
   const name=$('onName').value.trim()||'Player';
+  online.name=name;
   online.socket.emit('room:create',{name,size:mode.players},res=>{
     if(res.error) return setOnStatus(res.error);
     online.seat=res.seat; online.code=res.code; online.token=res.token;
+    renderVoice();
   });
 }
+
 function onlineJoin(){
   if(!online.socket) return setOnStatus(NO_SERVER);
+  prepareMic(); // runs inside the tap, so the microphone prompt appears now
   const name=$('onName').value.trim()||'Player', code=$('onCodeIn').value.trim();
+  online.name=name;
   online.socket.emit('room:join',{code,name},res=>{
     if(res.error) return setOnStatus(res.error);
     online.seat=res.seat; online.code=res.code; online.token=res.token;
+    renderVoice();
   });
 }
-function onlineStart(){ online.socket.emit('room:start',null,res=>{ if(res&&res.error) setOnStatus(res.error); }); }
-function onlineLeave(){ location.href=location.pathname; }
+
+function onlineStart(){
+  prepareMic(); // host tap: microphone prompt for the match
+  online.socket.emit('room:start',null,res=>{ if(res&&res.error) setOnStatus(res.error); });
+}
+
+function onlineLeave(){
+  voiceLeave();
+  VOICE.declined=false;
+  location.href=location.pathname;
+}
 
 const qRoom=new URLSearchParams(location.search).get('room');
 if(qRoom){ show('online'); $('onCodeIn').value=qRoom; }
@@ -764,6 +990,7 @@ document.addEventListener('keydown',e=>{
   if(/^[1-4]$/.test(e.key)) moveToken(+e.key-1);
   if(e.key==='r'&&!$('rollBtn').disabled) roll();
 });
+renderVoice();
 </script>
 </body>
 </html>
