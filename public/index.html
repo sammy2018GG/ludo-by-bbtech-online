@@ -59,4 +59,946 @@ button.go{background:linear-gradient(135deg,#22c55e,#15803d);box-shadow:0 10px 2
 .pip{border-radius:50%}
 .pip.on{background:#0d1a44}
 ul.log{list-style:none;display:grid;gap:6px;font-size:14px;color:#cdd8f5;max-height:230px;overflow:auto}
-ul.log li{padding:8px
+ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
+#toasts{position:fixed;top:78px;left:50%;transform:translateX(-50%);display:grid;gap:8px;z-index:40;pointer-events:none;width:min(90vw,380px)}
+.toast{background:#0b1638ee;border:2px solid;border-radius:14px;padding:10px 16px;text-align:center;font-weight:800;animation:pop 1.6s ease forwards;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+@keyframes pop{0%{opacity:0;transform:translateY(-10px) scale(.9)}12%{opacity:1;transform:translateY(0) scale(1.03)}20%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-12px)}}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
+.overlay{position:fixed;inset:0;background:rgba(3,7,20,.85);display:grid;place-items:center;padding:20px;z-index:50}
+.overlay .card{width:min(440px,100%);text-align:center}
+.overlay ol{list-style:none;display:grid;gap:8px;margin:18px 0}
+.overlay li{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.05);text-align:left}
+.rules{list-style:none;display:grid;gap:8px;color:#d6e0ff;font-size:15px}
+.rules li::before{content:"\2192  ";color:var(--gold);font-weight:800}
+.trophy{font-size:58px;animation:bob 1.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-8px) rotate(6deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.board{position:relative;width:min(98vw,calc(100vh - 150px),1000px);margin:0 auto}
+.board-img{display:block;width:100%;height:auto;border-radius:12px;box-shadow:0 30px 70px rgba(0,0,0,.55);background:#0b1638;user-select:none;-webkit-user-drag:none}
+.board-overlay{position:absolute;left:6.5%;top:7.3%;width:87.5%;height:83.3%;overflow:visible}
+.field{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1a44;color:#fff;font:inherit}
+.voicebar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;background:#0b1638f2;border:1px solid var(--line);border-radius:18px;padding:12px 14px;z-index:30;width:min(94vw,640px);box-shadow:0 14px 40px rgba(0,0,0,.5)}
+.voicebar button{min-height:42px;padding:10px 16px}
+.voicebar .hint{margin:0;flex-basis:100%;text-align:center}
+.voicebar details{flex-basis:100%;text-align:center;font-size:10px;color:#d6e0ff}
+.voicebar summary{cursor:pointer;color:var(--gold);font-weight:700;list-style:none;font-size:10px}
+.voicebar details p{margin-top:4px;font-size:10px}
+</style>
+<script src="/socket.io/socket.io.js" defer></script>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span id="logoHeader"></span>
+    <div><h1>LUDO</h1><p>BY BBTECH</p></div>
+  </div>
+  <button class="alt" id="soundBtn" onclick="toggleSound()" aria-pressed="true">🔊 Sound on</button>
+</header>
+
+<main>
+  <section id="menu" class="hero">
+    <div>
+      <h2>Roll the Dice.<br>Make Your Move.<br><span>Become a Champion.</span></h2>
+      <p class="tag">Classic Ludo with the full rules you know. Race four tokens home, capture rivals on the track, and outplay the bots. Every roll rattles, every hop clicks, and every six sings.</p>
+      <div class="row">
+        <button class="go" onclick="show('setup')">Play now</button>
+        <button class="alt" onclick="show('setup')">How to play</button>
+        <button class="alt" onclick="show('online')">Play online</button>
+      </div>
+    </div>
+    <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board" fetchpriority="high" decoding="async"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
+  </section>
+
+  <section id="setup" class="hidden" style="max-width:760px;margin:0 auto">
+    <div class="card" style="display:grid;gap:24px">
+      <div>
+        <h2 style="font-size:30px;font-weight:900">Set up your match</h2>
+        <p class="hint">Choose how you want to play and how many players are at the table.</p>
+      </div>
+      <div>
+        <p class="label">Game mode</p>
+        <div class="seg" role="group" aria-label="Game mode">
+          <button aria-pressed="true" onclick="pick('mode','bots',this)">vs Bots</button>
+          <button aria-pressed="false" onclick="pick('mode','pass',this)">Pass &amp; play</button>
+        </div>
+        <p id="modeDesc" class="hint" style="font-size:15px;color:#d6e0ff;margin-top:12px">Play alone with a bot and enjoy! Race your four tokens home, capture the bots on the track, and test yourself on Easy, Medium, or Hard.</p>
+      </div>
+      <div>
+        <p class="label">Table size</p>
+        <div class="seg" role="group" aria-label="Number of players">
+          <button aria-pressed="true" onclick="pick('players',2,this)">2 players</button>
+          <button aria-pressed="false" onclick="pick('players',4,this)">4 players</button>
+        </div>
+      </div>
+      <div>
+        <p class="label">Bot difficulty</p>
+        <div class="seg" role="group" aria-label="Bot difficulty">
+          <button aria-pressed="false" onclick="pick('level','easy',this)">Easy</button>
+          <button aria-pressed="true" onclick="pick('level','medium',this)">Medium</button>
+          <button aria-pressed="false" onclick="pick('level','hard',this)">Hard</button>
+        </div>
+      </div>
+      <div class="card" style="background:rgba(255,255,255,.03);padding:18px">
+        <p class="label">Rules in this match</p>
+        <ul class="rules">
+          <li>Roll two dice each turn. Each die is a separate move: tap a die to choose it first, then tap a token.</li>
+          <li>A 6 on either die brings a token out of base, and a 6 gives you an extra roll once your moves are done.</li>
+          <li>Three sixes in a row forfeits your turn.</li>
+          <li>Landing on a rival captures it, except on safe squares (marked with a star).</li>
+          <li>Tokens travel clockwise, turn into your home lane, and must land exactly on the centre to finish.</li>
+          <li>You must move when a legal move exists.</li>
+          <li>The match ends when all but one player have finished.</li>
+        </ul>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <button class="alt" onclick="show('menu')">Back</button>
+        <button class="go" onclick="startGame()">Start match</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="online" class="hidden" style="max-width:640px;margin:0 auto">
+  <div class="card" style="display:grid;gap:20px">
+    <div id="onEntry" style="display:grid;gap:18px">
+      <div>
+        <h2 style="font-size:30px;font-weight:900">Play online with family</h2>
+        <p class="hint" style="font-size:15px;color:#d6e0ff">Play with family on your own phones, each in your own home or the same room. One person creates a room and shares the 4-digit code or link. Everyone else joins with that code, and the host starts the game when all seats are filled. The server rolls the dice and checks every move, so nobody can cheat.</p>
+        <details style="margin-top:8px;font-size:10px;color:#fde68a">
+          <summary style="cursor:pointer;font-weight:700;font-size:10px">🎙️ Talk while you play</summary>
+          <p style="margin-top:4px;color:#d6e0ff;font-size:10px">Your microphone turns on when you create, join, or start a game. Call out moves, cheer sixes, and tease rivals. Allow the microphone when asked, and use headphones for the clearest sound.</p>
+        </details>
+      </div>
+      <div><p class="label">Your name</p><input id="onName" maxlength="16" placeholder="e.g. Mum" class="field"></div>
+      <div>
+        <p class="label">Players</p>
+        <div class="seg" role="group" aria-label="Players"><button aria-pressed="true" onclick="pick('players',2,this)">2 players</button><button aria-pressed="false" onclick="pick('players',4,this)">4 players</button></div>
+      </div>
+      <div><button class="go" onclick="onlineCreate()">Create room</button></div>
+      <div>
+        <p class="label">Or join a room</p>
+        <div class="row"><input id="onCodeIn" inputmode="numeric" maxlength="4" placeholder="4-digit code" class="field" style="flex:1;min-width:140px;letter-spacing:.2em"><button onclick="onlineJoin()">Join</button></div>
+      </div>
+    </div>
+    <div id="onWait" class="hidden" style="display:grid;gap:14px;text-align:center">
+      <p class="label">Room code</p>
+      <h2 id="onCode" style="font-size:52px;font-weight:900;letter-spacing:.2em"></h2>
+      <p class="hint">Share this link with family:</p>
+      <p id="onLink" style="word-break:break-all;color:var(--gold)"></p>
+      <ul id="onSeats" style="list-style:none;display:grid;gap:8px"></ul>
+      <div class="row" style="justify-content:center"><button id="onStart" class="go" onclick="onlineStart()">Start game</button><button class="alt" onclick="onlineLeave()">Leave</button></div>
+    </div>
+    <p id="onStatus" class="hint" aria-live="polite"></p>
+    <div><button class="alt" onclick="show('menu')">Back</button></div>
+  </div>
+</section>
+
+<section id="game" class="hidden game">
+    <div class="side" style="justify-items:center">
+      <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board" decoding="async"><svg id="svgGame" class="board-overlay" viewBox="0 0 15 15" role="application" aria-label="Ludo tokens"></svg></div>
+    </div>
+    <div class="side">
+      <div class="card">
+        <p class="status" id="status" aria-live="polite"></p>
+        <p class="hint" id="hint"></p>
+        <div class="dice-area">
+          <div class="dice-pair"><div id="die0" class="dice" role="button" tabindex="0" aria-label="Die 1" onclick="dieSelect(0)" onkeydown="if(event.key==='Enter')dieSelect(0)"></div><div id="die1" class="dice" role="button" tabindex="0" aria-label="Die 2" onclick="dieSelect(1)" onkeydown="if(event.key==='Enter')dieSelect(1)"></div></div>
+          <button id="rollBtn" class="go" onclick="roll()">Roll dice</button>
+        </div>
+      </div>
+      <div class="card"><div id="players" style="display:grid;gap:10px"></div></div>
+      <div class="card">
+        <p class="label">Match log</p>
+        <ul class="log" id="log" aria-live="polite"></ul>
+      </div>
+      <div class="row"><button class="alt" onclick="confirmQuit()">Leave match</button></div>
+    </div>
+  </section>
+</main>
+
+<!-- Voice bar: visible while you are in an online room -->
+<div id="voiceBar" class="voicebar hidden">
+  <details class="voice-desc">
+    <summary>🎙️ How to talk</summary>
+    <p>Call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
+  </details>
+  <button id="voiceBtn" class="go" onclick="voiceToggle()">🎤 Join voice</button>
+  <button id="muteBtn" class="alt hidden" onclick="voiceMute()">🎙️ Mute</button>
+  <button id="soundNowBtn" class="alt hidden" onclick="voiceEnableAudio()">🔈 Enable sound</button>
+  <p id="voicePeers" class="hint">Voice is off. Tap Join voice to talk.</p>
+</div>
+<div id="voiceAudio" style="position:absolute;width:0;height:0;overflow:hidden"></div>
+
+<div id="toasts" aria-live="polite"></div>
+<canvas id="fx" class="hidden"></canvas>
+
+<div id="handoff" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="handoffName">
+  <div class="card">
+    <p class="label">Pass the device</p>
+    <h2 id="handoffName" style="font-size:30px;font-weight:900;margin:8px 0"></h2>
+    <p class="hint">Only this player should look at the board now.</p>
+    <div class="row" style="justify-content:center;margin-top:18px"><button class="go" onclick="startHandoff()">I'm ready, start my turn</button></div>
+  </div>
+</div>
+<div id="win" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="card">
+    <div class="trophy" aria-hidden="true">🏆</div>
+    <h2 id="winTitle" style="font-size:26px;font-weight:900;margin-top:8px"></h2>
+    <p id="winMsg" style="font-size:17px;line-height:1.5;color:#e6ecff;margin-top:10px"></p>
+    <ol id="winList"></ol>
+    <div class="row" style="justify-content:center">
+      <button class="go" onclick="startGame()">Play again</button>
+      <button class="alt" onclick="show('menu')">Main menu</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span id="logoFooter"></span>
+  <span>Developed by <b>BBTECH</b></span>
+</footer>
+
+<script>
+/* ================= CONSTANTS & BOARD GEOMETRY ================= */
+const COLORS=['red','green','yellow','blue'];
+const LABEL={red:'Red',green:'Green',yellow:'Yellow',blue:'Blue'};
+const HEX={red:'#e0242b',green:'#1fa64a',yellow:'#ffd21f',blue:'#1f6fe0'};
+const DARK={red:'#7d0d13',green:'#0c5a28',yellow:'#9a7600',blue:'#0b3b8c'};
+const LIGHT={red:'#ff7a80',green:'#7ef0a6',yellow:'#fff0a0',blue:'#8ec3ff'};
+// Layout matches the uploaded board: yellow left arm, green top, red right, blue bottom.
+const START={yellow:0,green:13,red:26,blue:39};
+const CORNER={yellow:[0,0],green:[9,0],red:[9,9],blue:[0,9]};
+const SAFE=new Set([0,8,13,21,26,34,39,47]);
+const TRACK=[[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[7,0],[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[14,7],[14,8],[13,8],[12,8],[11,8],[10,8],[9,8],[8,9],[8,10],[8,11],[8,12],[8,13],[8,14],[7,14],[6,14],[6,13],[6,12],[6,11],[6,10],[6,9],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8],[0,7]];
+const HOME={
+  yellow:[0,1,2,3,4].map(k=>[1.5+k,7.5]),
+  green:[0,1,2,3,4].map(k=>[7.5,1.5+k]),
+  red:[0,1,2,3,4].map(k=>[13.5-k,7.5]),
+  blue:[0,1,2,3,4].map(k=>[7.5,13.5-k])
+};
+const DOTS={0:[],1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+
+const $=id=>document.getElementById(id);
+const rnd=n=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n;};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const mode={players:2,level:'medium',mode:'bots'};
+let G=null, aiTimer=null, busy=false;
+// True only while an online match is running (not for offline games)
+const isOnline=()=>!!(G&&G.mode==='online');
+
+const logo=s=>`<svg width="${s}" height="${s}" viewBox="0 0 64 64" aria-hidden="true">
+<rect x="3" y="3" width="58" height="58" rx="16" fill="#001a5c"/>
+<rect x="11" y="11" width="42" height="42" rx="11" fill="#ffffff"/>
+<rect x="18" y="18" width="28" height="28" rx="7" fill="#001a5c"/>
+<text x="32" y="43" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="25" fill="#ffffff">B</text>
+<rect x="24" y="30" width="6" height="11" fill="#0a5cff"/></svg>`;
+
+/* ================= SOUND (synthesized, no files) ================= */
+let AC=null, muted=false;
+function ensureAudio(){
+  if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
+  if(AC.state==='suspended') AC.resume();
+  return AC;
+}
+function tone(f,dur,type='sine',vol=.2,when=0,slide=0){
+  const c=ensureAudio(); if(!c||muted) return;
+  const t=c.currentTime+when, o=c.createOscillator(), g=c.createGain();
+  o.type=type; o.frequency.setValueAtTime(f,t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40,f+slide),t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur+.02);
+}
+function noise(dur,vol=.3,freq=1800,when=0){
+  const c=ensureAudio(); if(!c||muted) return;
+  const len=Math.floor(c.sampleRate*dur), b=c.createBuffer(1,len,c.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+  const s=c.createBufferSource(), f=c.createBiquadFilter(), g=c.createGain();
+  s.buffer=b; f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.2; g.gain.value=vol;
+  s.connect(f).connect(g).connect(c.destination); s.start(c.currentTime+when);
+}
+const sfx={
+  rattle(){ noise(.05,.35,2400); tone(1200+rnd(600),.03,'square',.03); },
+  land(){ noise(.14,.7,900); tone(170,.14,'triangle',.35,0,-70); },
+  hop(){ tone(640,.07,'triangle',.16,0,160); },
+  enter(){ tone(523,.1,'triangle',.25); tone(784,.16,'triangle',.25,.09); },
+  capture(){ tone(340,.4,'sawtooth',.14,0,-260); noise(.25,.6,500); },
+  six(){ [523,659,784,1047].forEach((f,k)=>tone(f,.2,'triangle',.22,k*.07)); },
+  home(){ [660,880,1100].forEach((f,k)=>tone(f,.28,'sine',.25,k*.11)); },
+  win(){ [523,659,784,659,784,1047,1319].forEach((f,k)=>tone(f,.32,'square',.09,k*.13)); },
+  forfeit(){ tone(260,.35,'sawtooth',.12,0,-150); },
+  turn(){ tone(880,.06,'sine',.08); }
+};
+function toggleSound(){
+  muted=!muted;
+  $('soundBtn').textContent=muted?'🔇 Sound off':'🔊 Sound on';
+  $('soundBtn').setAttribute('aria-pressed',String(!muted));
+}
+document.addEventListener('pointerdown',()=>ensureAudio(),{once:true});
+const vibrate=p=>{ if(navigator.vibrate) navigator.vibrate(p); };
+
+/* ================= FX ================= */
+function toast(msg,color){
+  const t=document.createElement('div');
+  t.className='toast'; t.textContent=msg; t.style.borderColor=color; t.style.color=color;
+  $('toasts').appendChild(t); setTimeout(()=>t.remove(),1600);
+}
+function confetti(){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv=$('fx'); cv.classList.remove('hidden'); cv.width=innerWidth; cv.height=innerHeight;
+  const x=cv.getContext('2d'), cols=['#e0242b','#1fa64a','#ffd21f','#1f6fe0','#ffffff','#fbbf24'];
+  const pcs=Array.from({length:180},()=>({x:Math.random()*cv.width,y:-30-Math.random()*cv.height*.4,
+    vx:(Math.random()-.5)*5,vy:2+Math.random()*4,s:6+Math.random()*7,r:Math.random()*6,c:cols[rnd(cols.length)]}));
+  let f=0;
+  (function loop(){
+    x.clearRect(0,0,cv.width,cv.height);
+    pcs.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.06;p.r+=.2;
+      x.fillStyle=p.c;x.save();x.translate(p.x,p.y);x.rotate(p.r);x.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);x.restore();});
+    if(++f<260) requestAnimationFrame(loop); else cv.classList.add('hidden');
+  })();
+}
+
+/* ================= BOARD RENDERING ================= */
+const tIdx=(c,p)=>(START[c]+p-1)%52;
+function tokenPos(c,t,i){
+  if(t===0){const [x,y]=CORNER[c];return [x+[1.5,3.5,1.5,3.5][i],y+[1.5,1.5,3.5,3.5][i]];}
+  if(t===58) return [7.5,7.5];
+  if(t>=53) return HOME[c][t-53];
+  const [x,y]=TRACK[tIdx(c,t)];return [x+.5,y+.5];
+}
+
+function drawBoard(el,players,legal=[],turnP=-1){
+  let s=`<defs>${COLORS.map(c=>`<radialGradient id="g-${c}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="${LIGHT[c]}"/><stop offset=".4" stop-color="${HEX[c]}"/><stop offset="1" stop-color="${DARK[c]}"/></radialGradient>`).join('')}</defs>`;
+  const groups={};
+  players.forEach((pl,p)=>pl.tokens.forEach((t,i)=>{
+    const [x,y]=tokenPos(pl.color,t,i);
+    const k=t===0?`b${p}-${i}`:`${x},${y}`;
+    (groups[k]=groups[k]||[]).push({p,i,c:pl.color,x,y});
+  }));
+  Object.values(groups).forEach(g=>g.forEach((tk,k)=>{
+    if(g.length>1){const a=k*2*Math.PI/g.length;tk.x+=Math.cos(a)*.36;tk.y+=Math.sin(a)*.36;}
+    const ok=tk.p===turnP&&legal.includes(tk.i);
+    s+=`<g class="tok${ok?' clickable':''}"${ok?` data-i="${tk.i}" role="button" aria-label="Move token ${tk.i+1}"`:''}>`
+      +(ok?`<circle class="ring" cx="${tk.x}" cy="${tk.y}" r=".7" fill="none" stroke="#fff" stroke-width=".08"/>`:'')
+      +`<ellipse cx="${tk.x+.03}" cy="${tk.y+.2}" rx=".4" ry=".12" fill="#000" opacity=".3"/>`
+      +`<circle cx="${tk.x}" cy="${tk.y}" r=".52" fill="${HEX[tk.c]}" stroke="${DARK[tk.c]}" stroke-width=".09"/>`
+      +`<circle cx="${tk.x+.06}" cy="${tk.y+.1}" r=".3" fill="${DARK[tk.c]}" opacity=".35"/>`
+      +`<circle cx="${tk.x-.12}" cy="${tk.y-.15}" r=".12" fill="#fff" opacity=".45"/></g>`;
+  }));
+  if(el._last===s) return;
+  el._last=s;
+  el.innerHTML=s;
+}
+
+/* ================= RULES ENGINE ================= */
+const isHuman=p=>G.players[p].type==='human';
+
+function legalMoves(p,d){
+  if(!d) return [];
+  return G.players[p].tokens.map((t,i)=>i).filter(i=>{
+    const t=G.players[p].tokens[i];
+    return t===0 ? d===6 : (t<58 && t+d<=58);
+  });
+}
+
+function endTurn(){
+  G.phase='roll'; G.sixes=0;
+  do{ G.turn=(G.turn+1)%G.players.length; }while(G.players[G.turn].rank);
+  G.handoff=G.mode==='pass'; if(isHuman(G.turn)) sfx.turn();
+  step();
+}
+
+/* ================= TWO-DICE ACTIONS ================= */
+function tokensUsable(p){
+  const set=new Set();
+  [0,1].forEach(k=>{ if(G.left[k]) legalMoves(p,G.dice[k]).forEach(i=>set.add(i)); });
+  return [...set];
+}
+const anyLegal=p=>tokensUsable(p).length>0;
+
+function dieSelect(k){
+  if(isOnline()&&G.turn!==online.seat) return;
+  if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)||!G.left[k]) return;
+  G.sel=G.sel===k?null:k;
+  render();
+}
+
+async function roll(){
+  if(isOnline()){ if(!G.over&&G.phase==='roll'&&G.turn===online.seat) online.socket.emit('game:roll'); return; }
+  if(!G||G.over||G.phase!=='roll'||busy||G.handoff) return;
+  busy=true;
+  const p=G.turn, pl=G.players[p];
+  ['die0','die1'].forEach(id=>{const el=$(id); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');});
+  for(let k=0;k<12;k++){
+    if(!G){busy=false;return;}
+    G.dice=[rnd(6)+1,rnd(6)+1]; renderDice(); sfx.rattle(); await sleep(45+k*7);
+  }
+  if(!G){busy=false;return;}
+  G.dice=[rnd(6)+1,rnd(6)+1]; G.left=[true,true]; G.sel=null;
+  renderDice(); sfx.land(); vibrate(15);
+  const [a,b]=G.dice;
+  G.rolledSix=(a===6||b===6);
+  G.sixes=G.rolledSix?G.sixes+1:0;
+  addLog(`${pl.name} rolled ${a} and ${b}.`);
+  busy=false;
+  if(G.sixes===3){
+    sfx.forfeit(); toast('Three sixes in a row! Turn forfeited','#ef4444');
+    addLog(`Third six in a row: ${pl.name} loses the turn.`);
+    return endTurn();
+  }
+  if(!anyLegal(p)){
+    addLog(`No legal move for ${pl.name}.`);
+    await sleep(600);
+    return endTurn();
+  }
+  if(G.rolledSix) sfx.six();
+  G.phase='move';
+  step();
+}
+
+function moveToken(i){
+  if(isOnline()){ if(G.turn===online.seat&&G.phase==='move') online.socket.emit('game:move',{i,k:G.sel}); return; }
+  if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)) return;
+  const opts=[0,1].filter(k=>G.left[k]&&legalMoves(G.turn,G.dice[k]).includes(i));
+  if(!opts.length) return;
+  const k=opts.includes(G.sel)?G.sel:opts[0];
+  G.sel=null;
+  applyMove(G.turn,i,k);
+}
+
+async function applyMove(p,i,k){
+  busy=true;
+  const pl=G.players[p], d=G.dice[k];
+  G.left[k]=false; G.sel=null;
+  const old=pl.tokens[i], nt=old===0?1:old+d;
+  const frames=old===0?[1]:Array.from({length:nt-old},(_,j)=>old+j+1);
+  for(const f of frames){
+    if(!G){busy=false;return;}
+    pl.tokens[i]=f; render();
+    if(old===0&&f===1) sfx.enter(); else sfx.hop();
+    await sleep(130);
+  }
+  if(!G){busy=false;return;}
+  pl.tokens[i]=nt;
+
+  const hits=[];
+  if(nt<=52){
+    const idx=tIdx(pl.color,nt);
+    if(!SAFE.has(idx)) G.players.forEach((q,qi)=>{
+      if(qi===p) return;
+      q.tokens.forEach((u,j)=>{
+        if(u>=1&&u<=52&&tIdx(q.color,u)===idx){q.tokens[j]=0;hits.push(q.name);}
+      });
+    });
+  }
+  if(hits.length){
+    sfx.capture(); vibrate([40,60,40]);
+    toast(`Captured ${hits.join(', ')}!`,'#ff4d5e');
+    addLog(`${pl.name} captured ${hits.join(' and ')}!`);
+  } else if(nt===58){
+    sfx.home(); toast('Home safe!','#fbbf24');
+    addLog(`${pl.name} brought a token home.`);
+  } else if(old===0){
+    addLog(`${pl.name} brought a token out.`);
+  }
+  if(pl.tokens.every(t=>t===58)){
+    pl.rank=++G.finished;
+    G.left=[false,false];
+    addLog(`${pl.name} finished in place ${pl.rank}!`);
+    if(G.finished>=G.players.length-1) G.over=true;
+  }
+  busy=false;
+  if(G.over) return step();
+  afterMove(p,pl);
+}
+
+function afterMove(p,pl){
+  if(anyLegal(p)){ G.phase='move'; return step(); }
+  if(G.rolledSix&&!pl.rank){
+    G.phase='roll';
+    toast('Six! Roll again','#fbbf24'); sfx.six();
+    return step();
+  }
+  endTurn();
+}
+
+/* ================= BOT ================= */
+function scoreMove(p,i,d){
+  const pl=G.players[p], t=pl.tokens[i], nt=t===0?1:t+d;
+  let s=0;
+  if(nt===58) s+=100;
+  if(t===0) s+=40;
+  s+=nt/10;
+  if(nt>=1&&nt<=52){
+    const idx=tIdx(pl.color,nt);
+    if(SAFE.has(idx)) s+=20;
+    else G.players.forEach((q,qi)=>{
+      if(qi===p) return;
+      q.tokens.forEach(u=>{
+        if(u<1||u>52) return;
+        const oi=tIdx(q.color,u);
+        if(oi===idx) s+=60;
+        else if(pl.level==='hard'){
+          const gap=(idx-oi+52)%52;
+          if(gap>=1&&gap<=6) s-=25;
+        }
+      });
+    });
+  }
+  return s;
+}
+
+async function aiMove(){
+  const p=G.turn, lvl=G.players[p].level, options=[];
+  [0,1].forEach(k=>{ if(G.left[k]) legalMoves(p,G.dice[k]).forEach(i=>options.push({i,k})); });
+  if(!options.length) return endTurn();
+  let pick;
+  if(lvl==='easy') pick=options[rnd(options.length)];
+  else{
+    const noise=lvl==='hard'?.5:8;
+    let bs=-Infinity;
+    options.forEach(o=>{
+      const sc=scoreMove(p,o.i,G.dice[o.k])+Math.random()*noise;
+      if(sc>bs){bs=sc;pick=o;}
+    });
+  }
+  await applyMove(p,pick.i,pick.k);
+}
+
+/* ================= FLOW & RENDERING ================= */
+function addLog(msg){ G.log.unshift(msg); G.log=G.log.slice(0,40); }
+
+function step(){
+  clearTimeout(aiTimer);
+  render();
+  if(G.over){ showWin(); return; }
+  if(isHuman(G.turn)||busy) return;
+  aiTimer=setTimeout(()=>{
+    if(busy||!G||G.over) return;
+    if(G.phase==='roll') roll(); else aiMove();
+  },800);
+}
+
+function renderDice(){
+  [0,1].forEach(k=>{
+    const v=G.dice?G.dice[k]:0, on=DOTS[v]||[], el=$('die'+k);
+    el.innerHTML=[...Array(9)].map((_,j)=>`<span class="pip${on.includes(j)?' on':''}"></span>`).join('');
+    el.classList.toggle('sel',G.sel===k);
+    el.classList.toggle('spent',!!G.dice&&!G.left[k]);
+    el.setAttribute('aria-label',`Die ${k+1} shows ${v||'nothing yet'}`);
+  });
+}
+
+function render(){
+  const human=isOnline()?G.turn===online.seat:isHuman(G.turn);
+  const legal=(!G.over&&!busy&&G.phase==='move'&&human)?tokensUsable(G.turn):[];
+  drawBoard($('svgGame'),G.players,legal,G.turn);
+
+  const pl=G.players[G.turn];
+  $('status').textContent=G.over?'Match complete':`${pl.name}'s turn`;
+  $('hint').textContent=G.over?'':human
+    ? (G.phase==='roll'?'Roll the dice to continue.':'Tap a die to pick it (optional), then a glowing token.')
+    : (isOnline()?`Waiting for ${pl.name}…`:'Bot is playing…');
+  const rb=$('rollBtn');
+  rb.disabled=G.over||busy||!human||G.phase!=='roll'||G.handoff;
+  $('handoff').classList.toggle('hidden',!(G.handoff&&!G.over));
+  $('handoffName').textContent=pl.name;
+  rb.textContent=(human&&G.phase==='move')?'Choose a token':'Roll dice';
+
+  renderDice();
+
+  $('players').innerHTML=G.players.map((q,p)=>{
+    const home=q.tokens.filter(t=>t===0).length, done=q.tokens.filter(t=>t===58).length;
+    const kind=q.type==='human'?'Human':`Bot · ${q.level}`;
+    return `<div class="pl${p===G.turn&&!G.over?' active':''}">
+      <span class="dot" style="background:${HEX[q.color]};box-shadow:0 0 12px ${HEX[q.color]}"></span>
+      <div><b>${q.name}</b><small>${kind} · ${home} in base · ${done}/4 home</small></div>
+      ${q.rank?`<span class="rank">#${q.rank}</span>`:''}</div>`;
+  }).join('');
+
+  $('log').innerHTML=G.log.slice(0,12).map(m=>`<li>${m}</li>`).join('');
+}
+
+const CELEBRATIONS=[
+  "Champion! You brought every token home. What a game, the crowd goes wild!",
+  "Brilliant play! Your tokens made it home first. Victory is yours!",
+  "What a finish! You are the Ludo champion. Take a bow!"
+];
+const LOSS_LINES=[
+  "Good game! The bots were strong this time. Run it back and take the title."
+];
+function speak(text){
+  if(muted||!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=1; u.pitch=1.1; u.volume=1; u.lang='en-US';
+  const v=speechSynthesis.getVoices().find(v=>/en/i.test(v.lang)&&/female|samantha|google/i.test(v.name))||speechSynthesis.getVoices().find(v=>/^en/i.test(v.lang));
+  if(v) u.voice=v;
+  speechSynthesis.speak(u);
+}
+function showWin(){
+  const order=[...G.players].sort((a,b)=>(a.rank||99)-(b.rank||99));
+  const champ=order[0];
+  const online_=isOnline();
+  const pass=G.mode==='pass';
+  const won=online_?G.players.indexOf(champ)===online.seat:champ.type==='human';
+  $('winTitle').textContent=pass?`${champ.name} wins!`:(won?'You are the champion!':`${champ.name} wins this match`);
+  const msg=pass?`${champ.name} wins! Well played, everyone. Let's go again.`:(won?CELEBRATIONS[rnd(CELEBRATIONS.length)]:LOSS_LINES[0]);
+  $('winMsg').textContent=msg;
+  $('winList').innerHTML=order.map((q,k)=>`<li>${k+1}. ${q.name} (${LABEL[q.color]})${q.rank?'':' · did not finish'}</li>`).join('');
+  $('win').classList.remove('hidden');
+  if(won){ sfx.win(); confetti(); vibrate([80,60,80,60,200]); setTimeout(()=>speak(msg),900); }
+  else sfx.forfeit();
+}
+
+function seatsFor(){
+  const cols=mode.players===2?['red','yellow']:COLORS;
+  if(mode.mode==='pass') return cols.map((c,k)=>({color:c,type:'human',name:`Player ${k+1}`}));
+  return cols.map((c,k)=>k===0
+    ? {color:c,type:'human',name:'You'}
+    : {color:c,type:'ai',level:mode.level,name:`${LABEL[c]} Bot`});
+}
+
+function startGame(){
+  ensureAudio();
+  G={players:seatsFor().map(s=>({...s,tokens:[0,0,0,0],rank:null})),turn:0,phase:'roll',dice:null,left:[true,true],sel:null,rolledSix:false,sixes:0,finished:0,over:false,log:[],mode:mode.mode,handoff:mode.mode==='pass'};
+  addLog('Match started. Roll a 6 to bring your first token out.');
+  show('game');
+  step();
+}
+
+function show(s){
+  ['menu','setup','game','online'].forEach(x=>$(x).classList.toggle('hidden',x!==s));
+  $('win').classList.add('hidden');
+  $('handoff').classList.add('hidden');
+  if(s!=='game'){clearTimeout(aiTimer);G=null;busy=false;}
+  if('speechSynthesis' in window) speechSynthesis.cancel();
+  window.scrollTo(0,0);
+  renderVoice();
+}
+
+function startHandoff(){
+  if(!G) return;
+  G.handoff=false; render();
+}
+
+function confirmQuit(){
+  if(confirm('Leave this match? Progress will be lost.')) (isOnline()?onlineLeave():show('menu'));
+}
+
+const MODE_TEXT={
+  bots:'Play alone with a bot and enjoy! Race your four tokens home, capture the bots on the track, and test yourself on Easy, Medium, or Hard.',
+  pass:'Play together on one device. Take turns: pass the phone or tablet around the table. Each person rolls the dice, moves a token, then hands it on to the next player. Choose 2 or 4 players below.'
+};
+function pick(k,v,btn){
+  mode[k]=v;
+  if(k==='mode') $('modeDesc').textContent=MODE_TEXT[v];
+  btn.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===btn)));
+}
+
+/* ================= ONLINE (family multiplayer) ================= */
+const NO_SERVER='Online play needs the game running from its server. See the README.';
+const online={socket:null,seat:-1,code:'',token:'',name:'Player'};
+let onlineQueue=Promise.resolve();
+
+// Show each token hopping square by square, then settle on the server's state
+async function applyOnlineState(next){
+  next.mode='online'; next.handoff=false;
+  if($('game').classList.contains('hidden')) show('game');
+  const prev=G;
+  if(!prev||!prev.players||prev.over||prev.mode!=='online'||prev.players.length!==next.players.length){ G=next; return step(); }
+  busy=true;
+  for(let p=0;p<next.players.length;p++) for(let i=0;i<4;i++){
+    const from=prev.players[p].tokens[i], to=next.players[p].tokens[i];
+    if(to<=from) continue;
+    const frames=from===0?[to]:Array.from({length:to-from},(_,j)=>from+j+1);
+    for(const f of frames){
+      G=JSON.parse(JSON.stringify(next));
+      G.players[p].tokens[i]=f;
+      render();
+      if(from===0) sfx.enter(); else sfx.hop();
+      await sleep(130);
+    }
+  }
+  busy=false;
+  G=next; step();
+}
+
+/* ================= VOICE CHAT (WebRTC, audio goes phone to phone) ================= */
+// For calls across different networks, add a TURN server to iceServers (see the notes).
+const RTC_CONFIG={
+  iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}
+    // ,{urls:'turn:your-turn-host:3478',username:'USER',credential:'PASSWORD'}
+  ]
+};
+const MIC_OPTS={audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}};
+const VOICE={stream:null,micReq:null,on:false,busy:false,declined:false,muted:false,peers:new Map(),names:new Map()};
+
+function voiceNote(t){ const el=$('voicePeers'); if(el) el.textContent=t; }
+
+// Asks for the microphone once and reuses the stream. Call it from a tap so the browser shows the prompt.
+function getMic(){
+  if(VOICE.stream) return Promise.resolve(VOICE.stream);
+  if(!VOICE.micReq){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.reject({name:'Unsupported'});
+    VOICE.micReq=navigator.mediaDevices.getUserMedia(MIC_OPTS)
+      .then(s=>{ VOICE.stream=s; return s; })
+      .catch(err=>{ VOICE.micReq=null; throw err; });
+  }
+  return VOICE.micReq;
+}
+function stopMic(){
+  if(VOICE.stream) VOICE.stream.getTracks().forEach(t=>t.stop());
+  VOICE.stream=null; VOICE.micReq=null;
+}
+function prepareMic(){ getMic().catch(()=>{}); }
+
+function micMsg(err){
+  if(err&&err.name==='Unsupported') return 'Voice needs an https:// address and a current browser (Chrome, Safari, or Edge).';
+  if(err&&err.name==='NotAllowedError') return 'Microphone is blocked. Allow it for this site (tap the lock icon in the address bar), then tap Join voice.';
+  return 'Could not open the microphone. Tap Join voice to try again.';
+}
+
+function renderVoice(){
+  const bar=$('voiceBar'); if(!bar) return;
+  bar.classList.toggle('hidden',!online.code);
+  const btn=$('voiceBtn');
+  btn.textContent=VOICE.on?'📞 Leave voice':'🎤 Join voice';
+  btn.className=VOICE.on?'alt':'go';
+  $('muteBtn').classList.toggle('hidden',!VOICE.on);
+  $('muteBtn').textContent=VOICE.muted?'🔇 Unmute':'🎙️ Mute';
+  const blocked=[...$('voiceAudio').querySelectorAll('audio')].some(a=>a.paused&&a.srcObject);
+  $('soundNowBtn').classList.toggle('hidden',!blocked);
+  if(VOICE.busy) return;
+  if(!VOICE.on){ voiceNote(VOICE.declined?'Mic is off. Tap Join voice to talk.':'Voice is off. Tap Join voice to talk.'); return; }
+  const list=[...VOICE.peers.entries()].map(([id,e])=>
+    `${VOICE.names.get(id)||'Player'} ${e.pc.connectionState==='connected'?'🟢':'🟡'}`);
+  voiceNote(list.length?`Talking with: ${list.join(' · ')}`:'Mic is on. Waiting for others to join voice…');
+}
+
+function removePeer(id){
+  const e=VOICE.peers.get(id); if(!e) return;
+  try{ e.pc.close(); }catch(_){}
+  if(e.audio){ e.audio.srcObject=null; e.audio.remove(); }
+  VOICE.peers.delete(id); VOICE.names.delete(id);
+  renderVoice();
+}
+
+async function makeOffer(id,e,iceRestart=false){
+  const offer=await e.pc.createOffer({iceRestart});
+  await e.pc.setLocalDescription(offer);
+  online.socket.emit('voice:signal',{to:id,data:{sdp:e.pc.localDescription}});
+}
+
+function createPeer(id,initiator){
+  if(VOICE.peers.has(id)) return VOICE.peers.get(id);
+  const pc=new RTCPeerConnection(RTC_CONFIG);
+  const e={pc,audio:null,pending:[],initiator};
+  VOICE.peers.set(id,e);
+  VOICE.stream.getTracks().forEach(t=>pc.addTrack(t,VOICE.stream));
+
+  pc.onicecandidate=ev=>{
+    if(ev.candidate) online.socket.emit('voice:signal',{to:id,data:{candidate:ev.candidate}});
+  };
+  pc.ontrack=ev=>{
+    if(!e.audio){
+      e.audio=document.createElement('audio');
+      e.audio.autoplay=true;
+      e.audio.playsInline=true;
+      $('voiceAudio').appendChild(e.audio);
+    }
+    e.audio.srcObject=ev.streams[0];
+    e.audio.play().catch(()=>renderVoice());
+    renderVoice();
+  };
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='failed'&&e.initiator) makeOffer(id,e,true).catch(()=>{});
+    renderVoice();
+  };
+  if(initiator) makeOffer(id,e).catch(()=>{});
+  return e;
+}
+
+async function voiceJoin(){
+  if(VOICE.on||VOICE.busy||!online.socket||!online.code) return;
+  VOICE.busy=true;
+  voiceNote('Turning on your microphone…');
+  try{
+    await getMic();
+  }catch(err){
+    VOICE.busy=false;
+    VOICE.declined=!!(err&&err.name==='NotAllowedError');
+    voiceNote(micMsg(err));
+    return;
+  }
+  VOICE.busy=false; VOICE.on=true; VOICE.muted=false; VOICE.declined=false;
+  renderVoice();
+  online.socket.emit('voice:join',{name:online.name},res=>{
+    (res&&res.peers||[]).forEach(p=>{
+      VOICE.names.set(p.id,p.name);
+      // Same rule on both phones: the smaller socket id makes the offer
+      createPeer(p.id,online.socket.id<p.id);
+    });
+    renderVoice();
+  });
+}
+
+function voiceLeave(){
+  if(online.socket&&VOICE.on) online.socket.emit('voice:leave');
+  [...VOICE.peers.keys()].forEach(removePeer);
+  stopMic();
+  VOICE.on=false; VOICE.muted=false;
+  renderVoice();
+}
+
+function voiceToggle(){
+  if(VOICE.on){ voiceLeave(); return; }
+  VOICE.declined=false;
+  voiceJoin();
+}
+
+function voiceMute(){
+  if(!VOICE.stream) return;
+  VOICE.muted=!VOICE.muted;
+  VOICE.stream.getAudioTracks().forEach(t=>t.enabled=!VOICE.muted);
+  renderVoice();
+}
+
+// Some phones block audio until a tap. This starts all incoming voices.
+function voiceEnableAudio(){
+  document.querySelectorAll('#voiceAudio audio').forEach(a=>a.play().catch(()=>{}));
+  setTimeout(renderVoice,300);
+}
+
+/* ================= SOCKET CONNECTION ================= */
+window.addEventListener('load',()=>{
+  if(typeof io==='undefined'){ setOnStatus(NO_SERVER); return; }
+  online.socket=io();
+
+  online.socket.on('connect',()=>{
+    setOnStatus('Connected');
+    if(online.code&&online.token) online.socket.emit('room:rejoin',{code:online.code,token:online.token},res=>{
+      if(res&&res.error) return setOnStatus(res.error);
+      online.seat=res.seat;
+    });
+  });
+
+  online.socket.on('disconnect',()=>{
+    setOnStatus('Connection lost. Reconnecting…');
+    if(VOICE.on){
+      [...VOICE.peers.keys()].forEach(removePeer);
+      stopMic();
+      VOICE.on=false;
+      voiceNote('Voice dropped. It will reconnect automatically.');
+      renderVoice();
+    }
+  });
+
+  online.socket.on('state',st=>{
+    online.code=st.code;
+    if(!st.G) showWaiting(st);
+    else onlineQueue=onlineQueue.then(()=>applyOnlineState(st.G));
+    // Microphone turns on automatically once you are in a room (and again after reconnecting)
+    if(!VOICE.on&&!VOICE.busy&&!VOICE.declined) voiceJoin();
+    renderVoice();
+  });
+
+  online.socket.on('voice:joined',({id,name})=>{
+    VOICE.names.set(id,name);
+    if(VOICE.on) createPeer(id,online.socket.id<id);
+    renderVoice();
+  });
+
+  online.socket.on('voice:left',({id})=>removePeer(id));
+
+  online.socket.on('voice:signal',async({from,data})=>{
+    if(!VOICE.on) return;
+    const e=VOICE.peers.get(from)||createPeer(from,false);
+    const pc=e.pc;
+    try{
+      if(data.sdp){
+        await pc.setRemoteDescription(data.sdp);
+        if(data.sdp.type==='offer'){
+          await pc.setLocalDescription(await pc.createAnswer());
+          online.socket.emit('voice:signal',{to:from,data:{sdp:pc.localDescription}});
+        }
+        for(const c of e.pending) await pc.addIceCandidate(c);
+        e.pending=[];
+      } else if(data.candidate){
+        if(pc.remoteDescription) await pc.addIceCandidate(data.candidate);
+        else e.pending.push(data.candidate);
+      }
+    }catch(err){ console.warn('[voice] signal error',err); }
+  });
+});
+
+function setOnStatus(t){ const el=$('onStatus'); if(el) el.textContent=t; }
+
+function showWaiting(st){
+  show('online');
+  $('onEntry').classList.add('hidden'); $('onWait').classList.remove('hidden');
+  $('onCode').textContent=st.code;
+  $('onLink').textContent=`${location.origin}/?room=${st.code}`;
+  const open=Array.from({length:st.size-st.seats.length},()=>'<li class="hint">Waiting for a player…</li>').join('');
+  $('onSeats').innerHTML=st.seats.map((s,k)=>`<li>${k===0?'Host · ':''}${s.name} ${s.connected?'🟢':'🔴'}</li>`).join('')+open;
+  const full=st.seats.length>=st.size;
+  $('onStart').classList.toggle('hidden',online.seat!==0);
+  $('onStart').disabled=!full;
+  $('onStart').textContent=full?'Start game':`Waiting for ${st.size-st.seats.length} more…`;
+  renderVoice();
+}
+
+function onlineCreate(){
+  if(!online.socket) return setOnStatus(NO_SERVER);
+  prepareMic(); // runs inside the tap, so the microphone prompt appears now
+  const name=$('onName').value.trim()||'Player';
+  online.name=name;
+  online.socket.emit('room:create',{name,size:mode.players},res=>{
+    if(res.error) return setOnStatus(res.error);
+    online.seat=res.seat; online.code=res.code; online.token=res.token;
+    renderVoice();
+  });
+}
+
+function onlineJoin(){
+  if(!online.socket) return setOnStatus(NO_SERVER);
+  prepareMic(); // runs inside the tap, so the microphone prompt appears now
+  const name=$('onName').value.trim()||'Player', code=$('onCodeIn').value.trim();
+  online.name=name;
+  online.socket.emit('room:join',{code,name},res=>{
+    if(res.error) return setOnStatus(res.error);
+    online.seat=res.seat; online.code=res.code; online.token=res.token;
+    renderVoice();
+  });
+}
+
+function onlineStart(){
+  prepareMic(); // host tap: microphone prompt for the match
+  online.socket.emit('room:start',null,res=>{ if(res&&res.error) setOnStatus(res.error); });
+}
+
+function onlineLeave(){
+  voiceLeave();
+  VOICE.declined=false;
+  location.href=location.pathname;
+}
+
+const qRoom=new URLSearchParams(location.search).get('room');
+if(qRoom){ show('online'); $('onCodeIn').value=qRoom; }
+
+/* ================= INIT ================= */
+$('logoHeader').innerHTML=logo(40);
+$('logoFooter').innerHTML=logo(26);
+drawBoard($('svgMenu'),COLORS.map(c=>({color:c,tokens:[0,1,9,30]})));
+$('svgGame').addEventListener('click',e=>{
+  const el=e.target.closest('[data-i]');
+  if(el) moveToken(+el.dataset.i);
+});
+document.addEventListener('keydown',e=>{
+  if(!G||G.over) return;
+  if(/^[1-4]$/.test(e.key)) moveToken(+e.key-1);
+  if(e.key==='r'&&!$('rollBtn').disabled) roll();
+});
+renderVoice();
+</script>
+</body>
+</html>
