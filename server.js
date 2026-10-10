@@ -81,6 +81,7 @@ function doMove(G, i, k) {
 
 /* ---------- rooms ---------- */
 const rooms = new Map();
+const voiceRooms = new Map(); // NEW: code -> Map(socketId -> name)
 function newCode() { let c; do { c = String(crypto.randomInt(1000, 10000)); } while (rooms.has(c)); return c; }
 function newGame(r) {
   const cols = r.size === 2 ? ['red', 'yellow'] : COLORS;
@@ -160,7 +161,37 @@ io.on('connection', socket => {
     if (doMove(G, i, kk)) broadcast(r);
   });
 
+  /* ---------- voice (NEW): relays setup messages only, audio goes phone to phone ---------- */
+  function leaveVoice() {
+    const code = socket.data.code;
+    const vr = voiceRooms.get(code);
+    if (!vr) return;
+    if (vr.delete(socket.id)) io.to(code).emit('voice:left', { id: socket.id });
+    if (vr.size === 0) voiceRooms.delete(code);
+  }
+
+  socket.on('voice:join', ({ name } = {}, ack = () => {}) => {
+    const code = socket.data.code;
+    if (!code || !rooms.has(code)) return ack({ peers: [] });
+    if (!voiceRooms.has(code)) voiceRooms.set(code, new Map());
+    const vr = voiceRooms.get(code);
+    const peers = [...vr.entries()].map(([id, n]) => ({ id, name: n }));
+    const myName = String(name || 'Player').trim().slice(0, 16) || 'Player';
+    vr.set(socket.id, myName);
+    socket.to(code).emit('voice:joined', { id: socket.id, name: myName });
+    ack({ peers });
+  });
+
+  socket.on('voice:signal', ({ to, data } = {}) => {
+    const vr = voiceRooms.get(socket.data.code);
+    if (!vr || !vr.has(socket.id) || !vr.has(to)) return;
+    io.to(to).emit('voice:signal', { from: socket.id, data });
+  });
+
+  socket.on('voice:leave', () => leaveVoice());
+
   socket.on('disconnect', () => {
+    leaveVoice(); // NEW: tell others this phone left voice
     const r = roomOf(); if (!r) return;
     const idx = seatOf(r, socket.id); if (idx < 0) return;
     if (r.G) {
