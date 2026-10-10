@@ -16,7 +16,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .brand h1{font-size:18px;letter-spacing:.14em;font-weight:900}
 .brand p{font-size:10px;letter-spacing:.24em;color:var(--gold);font-weight:700}
 main{flex:1;width:min(1400px,100%);margin:0 auto;padding:clamp(14px,4vw,32px)}
-footer{border-top:1px solid var(--line);padding:16px;color:var(--muted);font-size:13px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+footer{border-top:1px solid var(--line);padding:12px 16px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:8px}
+footer .credit{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
 footer b{color:var(--txt)}
 button{font:inherit;font-weight:700;color:#fff;border:0;border-radius:14px;padding:12px 20px;min-height:46px;cursor:pointer;background:linear-gradient(135deg,#2563eb,#1e3a8a);box-shadow:0 10px 28px rgba(37,99,235,.35);transition:transform .15s,opacity .2s}
 button:hover:not(:disabled){transform:translateY(-2px)}
@@ -49,11 +50,10 @@ button.go{background:linear-gradient(135deg,#22c55e,#15803d);box-shadow:0 10px 2
 .dot{width:14px;height:14px;border-radius:50%;flex:none}
 .rank{margin-left:auto;background:var(--gold);color:#1b1200;font-weight:900;border-radius:10px;padding:4px 9px}
 .dice-area{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:16px}
-.dice{width:88px;height:88px;border-radius:20px;background:linear-gradient(145deg,#ffffff,#dfe7ff);box-shadow:inset 0 -6px 0 #b8c6ee,0 14px 30px rgba(0,0,0,.4);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:14px;gap:4px}
+.dice{width:88px;height:88px;border-radius:20px;background:linear-gradient(145deg,#ffffff,#dfe7ff);box-shadow:inset 0 -6px 0 #b8c6ee,0 14px 30px rgba(0,0,0,.4);display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);padding:14px;gap:4px;cursor:pointer;transition:opacity .2s}
 .dice.shake{animation:shake .6s ease}
 @keyframes shake{0%{transform:rotate(0)}15%{transform:rotate(-16deg) translateY(-6px)}30%{transform:rotate(14deg)}45%{transform:rotate(-10deg) translateY(-3px)}60%{transform:rotate(8deg)}80%{transform:rotate(-3deg)}100%{transform:rotate(0)}}
 .dice-pair{display:flex;gap:14px}
-.dice{cursor:pointer;transition:opacity .2s}
 .dice.sel{outline:3px solid var(--gold);outline-offset:4px}
 .dice.spent{opacity:.35}
 .pip{border-radius:50%}
@@ -78,13 +78,13 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
 .board-overlay{position:absolute;left:6.5%;top:7.3%;width:87.5%;height:83.3%;overflow:visible}
 .field{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1a44;color:#fff;font:inherit}
 
-/* Voice bar: sits in the page flow, not floating over the board */
-.voicebar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#0b1638;border:1px solid var(--line);border-radius:16px;padding:10px 12px;width:100%}
-.voicebar button{min-height:38px;padding:8px 14px;font-size:13px}
-.voicebar #voicePeers{margin:0;font-size:12px;flex:1;min-width:140px}
-.voicebar details{width:100%;font-size:10px;color:#d6e0ff}
-.voicebar summary{cursor:pointer;color:var(--gold);font-weight:700;list-style:none;font-size:10px}
-.voicebar details p{margin-top:4px;font-size:10px}
+/* Voice bar: lives in the footer, compact */
+.voicebar{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;width:100%;max-width:640px;font-size:10px}
+.voicebar button{min-height:32px;padding:6px 12px;font-size:12px;border-radius:10px}
+.voicebar #voicePeers{margin:0;font-size:10px;color:var(--muted);text-align:center;width:100%}
+.voicebar details{width:100%;text-align:center;color:#d6e0ff;font-size:10px}
+.voicebar summary{cursor:pointer;color:var(--gold);font-weight:700;list-style:none;font-size:10px;display:inline-block}
+.voicebar details p{margin-top:3px;font-size:10px}
 </style>
 <script src="/socket.io/socket.io.js" defer></script>
 </head>
@@ -95,7 +95,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
     <span id="logoHeader"></span>
     <div><h1>LUDO</h1><p>BY BBTECH</p></div>
   </div>
-  <button class="alt" id="soundBtn" onclick="toggleSound()" aria-pressed="true">🔊 Sound on</button>
+  <button class="alt" id="soundBtn" aria-pressed="true">🔊 Sound on</button>
 </header>
 
 <main>
@@ -104,9 +104,9 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
       <h2>Roll the Dice.<br>Make Your Move.<br><span>Become a Champion.</span></h2>
       <p class="tag">Classic Ludo with the full rules you know. Race four tokens home, capture rivals on the track, and outplay the bots. Every roll rattles, every hop clicks, and every six sings.</p>
       <div class="row">
-        <button class="go" onclick="show('setup')">Play now</button>
-        <button class="alt" onclick="show('setup')">How to play</button>
-        <button class="alt" onclick="show('online')">Play online</button>
+        <button class="go" id="btnPlayNow">Play now</button>
+        <button class="alt" id="btnHow">How to play</button>
+        <button class="alt" id="btnMenuOnline">Play online</button>
       </div>
     </div>
     <div class="board"><img class="board-img" src="board.png" alt="Football Ludo board" fetchpriority="high" decoding="async"><svg id="svgMenu" class="board-overlay" viewBox="0 0 15 15" role="img" aria-label="Board preview"></svg></div>
@@ -121,24 +121,24 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
       <div>
         <p class="label">Game mode</p>
         <div class="seg" role="group" aria-label="Game mode">
-          <button aria-pressed="true" onclick="pick('mode','bots',this)">vs Bots</button>
-          <button aria-pressed="false" onclick="pick('mode','pass',this)">Pass &amp; play</button>
+          <button aria-pressed="true" data-k="mode" data-v="bots">vs Bots</button>
+          <button aria-pressed="false" data-k="mode" data-v="pass">Pass &amp; play</button>
         </div>
         <p id="modeDesc" class="hint" style="font-size:15px;color:#d6e0ff;margin-top:12px">Play alone with a bot and enjoy! Race your four tokens home, capture the bots on the track, and test yourself on Easy, Medium, or Hard.</p>
       </div>
       <div>
         <p class="label">Table size</p>
         <div class="seg" role="group" aria-label="Number of players">
-          <button aria-pressed="true" onclick="pick('players',2,this)">2 players</button>
-          <button aria-pressed="false" onclick="pick('players',4,this)">4 players</button>
+          <button aria-pressed="true" data-k="players" data-v="2">2 players</button>
+          <button aria-pressed="false" data-k="players" data-v="4">4 players</button>
         </div>
       </div>
       <div>
         <p class="label">Bot difficulty</p>
         <div class="seg" role="group" aria-label="Bot difficulty">
-          <button aria-pressed="false" onclick="pick('level','easy',this)">Easy</button>
-          <button aria-pressed="true" onclick="pick('level','medium',this)">Medium</button>
-          <button aria-pressed="false" onclick="pick('level','hard',this)">Hard</button>
+          <button aria-pressed="false" data-k="level" data-v="easy">Easy</button>
+          <button aria-pressed="true" data-k="level" data-v="medium">Medium</button>
+          <button aria-pressed="false" data-k="level" data-v="hard">Hard</button>
         </div>
       </div>
       <div class="card" style="background:rgba(255,255,255,.03);padding:18px">
@@ -154,8 +154,8 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
         </ul>
       </div>
       <div class="row" style="justify-content:space-between">
-        <button class="alt" onclick="show('menu')">Back</button>
-        <button class="go" onclick="startGame()">Start match</button>
+        <button class="alt" id="btnBackSetup">Back</button>
+        <button class="go" id="btnStartMatch">Start match</button>
       </div>
     </div>
   </section>
@@ -166,20 +166,16 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
       <div>
         <h2 style="font-size:30px;font-weight:900">Play online with family</h2>
         <p class="hint" style="font-size:15px;color:#d6e0ff">Play with family on your own phones, each in your own home or the same room. One person creates a room and shares the 4-digit code or link. Everyone else joins with that code, and the host starts the game when all seats are filled. The server rolls the dice and checks every move, so nobody can cheat.</p>
-        <details style="margin-top:8px;font-size:10px;color:#fde68a">
-          <summary style="cursor:pointer;font-weight:700;font-size:10px">🎙️ Talk while you play</summary>
-          <p style="margin-top:4px;color:#d6e0ff;font-size:10px">Your microphone turns on when you create, join, or start a game. Call out moves, cheer sixes, and tease rivals. Allow the microphone when asked, and use headphones for the clearest sound.</p>
-        </details>
       </div>
       <div><p class="label">Your name</p><input id="onName" maxlength="16" placeholder="e.g. Mum" class="field"></div>
       <div>
         <p class="label">Players</p>
-        <div class="seg" role="group" aria-label="Players"><button aria-pressed="true" onclick="pick('players',2,this)">2 players</button><button aria-pressed="false" onclick="pick('players',4,this)">4 players</button></div>
+        <div class="seg" role="group" aria-label="Players"><button aria-pressed="true" data-k="players" data-v="2">2 players</button><button aria-pressed="false" data-k="players" data-v="4">4 players</button></div>
       </div>
-      <div><button class="go" onclick="onlineCreate()">Create room</button></div>
+      <div><button class="go" id="btnCreate">Create room</button></div>
       <div>
         <p class="label">Or join a room</p>
-        <div class="row"><input id="onCodeIn" inputmode="numeric" maxlength="4" placeholder="4-digit code" class="field" style="flex:1;min-width:140px;letter-spacing:.2em"><button onclick="onlineJoin()">Join</button></div>
+        <div class="row"><input id="onCodeIn" inputmode="numeric" maxlength="4" placeholder="4-digit code" class="field" style="flex:1;min-width:140px;letter-spacing:.2em"><button id="btnJoin">Join</button></div>
       </div>
     </div>
     <div id="onWait" class="hidden" style="display:grid;gap:14px;text-align:center">
@@ -188,10 +184,10 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
       <p class="hint">Share this link with family:</p>
       <p id="onLink" style="word-break:break-all;color:var(--gold)"></p>
       <ul id="onSeats" style="list-style:none;display:grid;gap:8px"></ul>
-      <div class="row" style="justify-content:center"><button id="onStart" class="go" onclick="onlineStart()">Start game</button><button class="alt" onclick="onlineLeave()">Leave</button></div>
+      <div class="row" style="justify-content:center"><button id="onStart" class="go">Start game</button><button class="alt" id="btnLeaveRoom">Leave</button></div>
     </div>
     <p id="onStatus" class="hint" aria-live="polite"></p>
-    <div><button class="alt" onclick="show('menu')">Back</button></div>
+    <div><button class="alt" id="btnBackOnline">Back</button></div>
   </div>
 </section>
 
@@ -204,8 +200,8 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
         <p class="status" id="status" aria-live="polite"></p>
         <p class="hint" id="hint"></p>
         <div class="dice-area">
-          <div class="dice-pair"><div id="die0" class="dice" role="button" tabindex="0" aria-label="Die 1" onclick="dieSelect(0)" onkeydown="if(event.key==='Enter')dieSelect(0)"></div><div id="die1" class="dice" role="button" tabindex="0" aria-label="Die 2" onclick="dieSelect(1)" onkeydown="if(event.key==='Enter')dieSelect(1)"></div></div>
-          <button id="rollBtn" class="go" onclick="roll()">Roll dice</button>
+          <div class="dice-pair"><div id="die0" class="dice" role="button" tabindex="0" aria-label="Die 1"></div><div id="die1" class="dice" role="button" tabindex="0" aria-label="Die 2"></div></div>
+          <button id="rollBtn" class="go">Roll dice</button>
         </div>
       </div>
       <div class="card"><div id="players" style="display:grid;gap:10px"></div></div>
@@ -213,26 +209,12 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
         <p class="label">Match log</p>
         <ul class="log" id="log" aria-live="polite"></ul>
       </div>
-
-      <!-- Voice bar: inside the game column, below the log, so it never covers the dice or board -->
-      <div id="voiceBar" class="voicebar hidden">
-        <details>
-          <summary>🎙️ How to talk</summary>
-          <p>Call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
-        </details>
-        <button id="voiceBtn" class="go" onclick="voiceToggle()">🎤 Join voice</button>
-        <button id="muteBtn" class="alt hidden" onclick="voiceMute()">🎙️ Mute</button>
-        <button id="soundNowBtn" class="alt hidden" onclick="voiceEnableAudio()">🔈 Enable sound</button>
-        <p id="voicePeers" class="hint">Voice is off. Tap Join voice to talk.</p>
-      </div>
-
-      <div class="row"><button class="alt" onclick="confirmQuit()">Leave match</button></div>
+      <div class="row"><button class="alt" id="btnLeaveMatch">Leave match</button></div>
     </div>
   </section>
 </main>
 
 <div id="voiceAudio" style="position:absolute;width:0;height:0;overflow:hidden"></div>
-
 <div id="toasts" aria-live="polite"></div>
 <canvas id="fx" class="hidden"></canvas>
 
@@ -241,7 +223,7 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
     <p class="label">Pass the device</p>
     <h2 id="handoffName" style="font-size:30px;font-weight:900;margin:8px 0"></h2>
     <p class="hint">Only this player should look at the board now.</p>
-    <div class="row" style="justify-content:center;margin-top:18px"><button class="go" onclick="startHandoff()">I'm ready, start my turn</button></div>
+    <div class="row" style="justify-content:center;margin-top:18px"><button class="go" id="btnHandoff">I'm ready, start my turn</button></div>
   </div>
 </div>
 <div id="win" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="winTitle">
@@ -251,15 +233,27 @@ ul.log li{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04)}
     <p id="winMsg" style="font-size:17px;line-height:1.5;color:#e6ecff;margin-top:10px"></p>
     <ol id="winList"></ol>
     <div class="row" style="justify-content:center">
-      <button class="go" onclick="startGame()">Play again</button>
-      <button class="alt" onclick="show('menu')">Main menu</button>
+      <button class="go" id="btnAgain">Play again</button>
+      <button class="alt" id="btnWinMenu">Main menu</button>
     </div>
   </div>
 </div>
 
 <footer>
-  <span id="logoFooter"></span>
-  <span>Developed by <b>BBTECH</b></span>
+  <div id="voiceBar" class="voicebar hidden">
+    <details>
+      <summary>🎙️ How to talk</summary>
+      <p>Call out your moves, cheer sixes, and tease rivals. Headphones give the clearest sound.</p>
+    </details>
+    <button id="voiceBtn" class="go">🎤 Join voice</button>
+    <button id="muteBtn" class="alt hidden">🎙️ Mute</button>
+    <button id="soundNowBtn" class="alt hidden">🔈 Enable sound</button>
+    <p id="voicePeers">Voice is off. Tap Join voice to talk.</p>
+  </div>
+  <div class="credit">
+    <span id="logoFooter"></span>
+    <span>Developed by <b>BBTECH</b></span>
+  </div>
 </footer>
 
 <script>
@@ -420,15 +414,19 @@ function tokensUsable(p){
 const anyLegal=p=>tokensUsable(p).length>0;
 
 function dieSelect(k){
-  if(isOnline()&&G.turn!==online.seat) return;
   if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)||!G.left[k]) return;
+  if(isOnline()&&G.turn!==online.seat) return;
   G.sel=G.sel===k?null:k;
   render();
 }
 
 async function roll(){
-  if(isOnline()){ if(!G.over&&G.phase==='roll'&&G.turn===online.seat) online.socket.emit('game:roll'); return; }
-  if(!G||G.over||G.phase!=='roll'||busy||G.handoff) return;
+  if(!G||G.over) return;
+  if(isOnline()){
+    if(G.phase==='roll'&&G.turn===online.seat&&online.socket) online.socket.emit('game:roll');
+    return;
+  }
+  if(G.phase!=='roll'||busy||G.handoff) return;
   busy=true;
   const p=G.turn, pl=G.players[p];
   ['die0','die1'].forEach(id=>{const el=$(id); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');});
@@ -460,8 +458,12 @@ async function roll(){
 }
 
 function moveToken(i){
-  if(isOnline()){ if(G.turn===online.seat&&G.phase==='move') online.socket.emit('game:move',{i,k:G.sel}); return; }
-  if(!G||G.over||busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)) return;
+  if(!G||G.over) return;
+  if(isOnline()){
+    if(G.turn===online.seat&&G.phase==='move'&&online.socket) online.socket.emit('game:move',{i,k:G.sel});
+    return;
+  }
+  if(busy||G.handoff||G.phase!=='move'||!isHuman(G.turn)) return;
   const opts=[0,1].filter(k=>G.left[k]&&legalMoves(G.turn,G.dice[k]).includes(i));
   if(!opts.length) return;
   const k=opts.includes(G.sel)?G.sel:opts[0];
@@ -642,9 +644,8 @@ function speak(text){
 function showWin(){
   const order=[...G.players].sort((a,b)=>(a.rank||99)-(b.rank||99));
   const champ=order[0];
-  const online_=isOnline();
   const pass=G.mode==='pass';
-  const won=online_?G.players.indexOf(champ)===online.seat:champ.type==='human';
+  const won=isOnline()?G.players.indexOf(champ)===online.seat:champ.type==='human';
   $('winTitle').textContent=pass?`${champ.name} wins!`:(won?'You are the champion!':`${champ.name} wins this match`);
   const msg=pass?`${champ.name} wins! Well played, everyone. Let's go again.`:(won?CELEBRATIONS[rnd(CELEBRATIONS.length)]:LOSS_LINES[0]);
   $('winMsg').textContent=msg;
@@ -986,6 +987,40 @@ function onlineLeave(){
   location.href=location.pathname;
 }
 
+/* ================= BUTTON WIRING (no inline handlers) ================= */
+function wireUp(){
+  $('soundBtn').addEventListener('click',toggleSound);
+  $('btnPlayNow').addEventListener('click',()=>show('setup'));
+  $('btnHow').addEventListener('click',()=>show('setup'));
+  $('btnMenuOnline').addEventListener('click',()=>show('online'));
+  $('btnBackSetup').addEventListener('click',()=>show('menu'));
+  $('btnStartMatch').addEventListener('click',startGame);
+  $('btnBackOnline').addEventListener('click',()=>show('menu'));
+  $('btnCreate').addEventListener('click',onlineCreate);
+  $('btnJoin').addEventListener('click',onlineJoin);
+  $('onStart').addEventListener('click',onlineStart);
+  $('btnLeaveRoom').addEventListener('click',onlineLeave);
+  $('btnLeaveMatch').addEventListener('click',confirmQuit);
+  $('rollBtn').addEventListener('click',roll);
+  $('die0').addEventListener('click',()=>dieSelect(0));
+  $('die1').addEventListener('click',()=>dieSelect(1));
+  $('die0').addEventListener('keydown',e=>{ if(e.key==='Enter') dieSelect(0); });
+  $('die1').addEventListener('keydown',e=>{ if(e.key==='Enter') dieSelect(1); });
+  $('btnHandoff').addEventListener('click',startHandoff);
+  $('btnAgain').addEventListener('click',startGame);
+  $('btnWinMenu').addEventListener('click',()=>show('menu'));
+  $('voiceBtn').addEventListener('click',voiceToggle);
+  $('muteBtn').addEventListener('click',voiceMute);
+  $('soundNowBtn').addEventListener('click',voiceEnableAudio);
+  document.querySelectorAll('button[data-k]').forEach(b=>{
+    b.addEventListener('click',()=>pick(b.dataset.k, b.dataset.k==='mode'?b.dataset.v:+b.dataset.v||b.dataset.v, b));
+  });
+  $('svgGame').addEventListener('click',e=>{
+    const el=e.target.closest('[data-i]');
+    if(el) moveToken(+el.dataset.i);
+  });
+}
+
 const qRoom=new URLSearchParams(location.search).get('room');
 if(qRoom){ show('online'); $('onCodeIn').value=qRoom; }
 
@@ -993,10 +1028,7 @@ if(qRoom){ show('online'); $('onCodeIn').value=qRoom; }
 $('logoHeader').innerHTML=logo(40);
 $('logoFooter').innerHTML=logo(26);
 drawBoard($('svgMenu'),COLORS.map(c=>({color:c,tokens:[0,1,9,30]})));
-$('svgGame').addEventListener('click',e=>{
-  const el=e.target.closest('[data-i]');
-  if(el) moveToken(+el.dataset.i);
-});
+wireUp();
 document.addEventListener('keydown',e=>{
   if(!G||G.over) return;
   if(/^[1-4]$/.test(e.key)) moveToken(+e.key-1);
